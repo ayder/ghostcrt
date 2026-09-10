@@ -1,0 +1,43 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        python: ['3.12', '3.14']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: '0.12.10'
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked --all-extras
+      - run: uv run --no-sync ruff check src tests
+      - run: uv run --no-sync pytest -q
+      - name: Audit installed dependencies
+        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.12'
+        shell: bash
+        run: |
+          package_dir=$(uv run --no-sync python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
+          uvx pip-audit==2.10.1 --path "$package_dir" --progress-spinner off
+      - run: uv build
+      - name: Smoke test the built wheel
+        shell: bash
+        run: |
+          uv venv "$RUNNER_TEMP/ghostcrt-wheel"
+          uv pip install --python "$RUNNER_TEMP/ghostcrt-wheel/bin/python" dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/ghostcrt-wheel/bin/ghostcrt" --version
+          "$RUNNER_TEMP/ghostcrt-wheel/bin/python" -c 'from ghostcrt.ui.widgets.terminal import TerminalWidget; from ghostty_textual import Terminal; t = Terminal(80, 24); t.feed(b"smoke"); t.close()'

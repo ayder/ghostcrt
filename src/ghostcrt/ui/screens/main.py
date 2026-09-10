@@ -1,0 +1,379 @@
+from __future__ import annotations
+
+import asyncio
+import shutil
+from pathlib import Path
+from typing import ClassVar
+
+from textual import events, on, work
+from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal
+from textual.screen import Screen
+from textual.widgets import Footer, Header
+
+from ghostcrt.config.include_bootstrap import include_is_configured
+from ghostcrt.config.inventory import READONLY_GROUP, HostInventory
+from ghostcrt.config.ssh_config import SshConfigError
+from ghostcrt.models import Host
+from ghostcrt.ssh.command import build_ssh_command
+from ghostcrt.ssh.session import SshSession
+from ghostcrt.ui.screens.action_menu import ActionMenuScreen
+from ghostcrt.ui.screens.group_picker import GroupPickerScreen
+from ghostcrt.ui.screens.host_edit import HostEditModal
+from ghostcrt.ui.screens.include_setup import IncludeSetupModal
+from ghostcrt.ui.screens.vault_edit import VaultEditModal
+from ghostcrt.ui.widgets.host_list import HostList
+from ghostcrt.ui.widgets.menu_bar import MenuBar
+from ghostcrt.ui.widgets.session_tabs import SessionTabs
+from ghostcrt.ui.widgets.terminal import TerminalWidget
+from ghostcrt.vault.vault import Vault, VaultError
+
+
+class MainScreen(Screen):
+    BINDINGS: ClassVar[list[Binding | tuple[str, str, str]]] = [
+        Binding("slash", "focus_search", "Search", show=False),
+        Binding("ctrl+n", "focus_hosts", "Hosts", show=False),
+        Binding("ctrl+w", "close_session", "Close session", show=False),
+        Binding(
+            "ctrl+right_square_bracket",
+            "focus_hosts",
+            "Release terminal",
+            key_display="Ctrl+]",
+            show=False,
+            priority=True,
+        ),
+    ]
+
+    DEFAULT_CSS = """
+    #main-body {
+        height: 1fr;
+    }
+    MainScreen.compact #main-body {
+        layout: vertical;
+    }
+    MainScreen.compact HostList {
+        width: 1fr;
+        height: 9;
+        border-right: none;
+        border-bottom: solid ansi_bright_black;
+    }
+    """
+
+    def __init__(
+        self, vault: Vault, inventory: HostInventory, *, ssh_config: Path | None = None, **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.vault = vault
+        self.inventory = inventory
+        self.ssh_config = ssh_config
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield MenuBar()
+        with Horizontal(id="main-body"):
+            yield HostList(id="host-list")
+            yield SessionTabs(id="session-tabs")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.refresh_hosts()
+        self.set_class(self.size.width < 90, "compact")
+        self.action_focus_hosts()
+        self._offer_include_setup()
+
+    def _offer_include_setup(self) -> None:
+        if include_is_configured(self.inventory.ssh_config, self.inventory.includes):
+            return
+
+        def handle(added: bool | None) -> None:
+            if added:
+                self.refresh_hosts()
+
+        self.app.push_screen(
+            IncludeSetupModal(self.inventory.ssh_config, self.inventory.includes),
+            handle,
+        )
+
+    def on_resize(self, event: events.Resize) -> None:
+        self.set_class(event.size.width < 90, "compact")
+
+    def refresh_hosts(self) -> None:
+        try:
+            self.inventory.reload()
+        except SshConfigError as exc:
+            self.notify(str(exc), severity="error")
+        self.query_one(HostList).set_groups(self.inventory.groups())
+
+    def action_focus_search(self) -> None:
+        self.query_one(HostList).focus_filter()
+
+    def action_focus_hosts(self) -> None:
+        self.query_one(HostList).focus_list()
+
+    @on(TerminalWidget.ReleaseFocus)
+    def on_terminal_release_focus(self) -> None:
+        self.action_focus_hosts()
+
+    def action_close_session(self) -> None:
+        self.run_worker(self.query_one(SessionTabs).close_active())
+
+    @on(HostList.HostSelected)
+    def on_host_selected(self, event: HostList.HostSelected) -> None:
+        self.open_session(event.host)
+
+    @work
+    async def open_session(self, host: Host) -> None:
+        password = self.vault.get(host.alias)
+        if password and not shutil.which("sshpass"):
+            self.notify(
+                "sshpass is not installed; required for vault passwords.",
+                severity="error",
+            )
+            return
+        cmd = build_ssh_command(host.alias, password, config=self.ssh_config)
+        session = SshSession(alias=host.alias)
+        tabs = self.query_one(SessionTabs)
+        pane_id: str | None = None
+        try:
+            # Mount and lay out the terminal before spawning SSH. This gives
+            # the child its real PTY dimensions from the first instruction,
+            # rather than starting at 24x80 and racing a later SIGWINCH.
+            pane_id = await tabs.add_session(session)
+            await session.start(
+                cmd.argv,
+                pass_fds=cmd.pass_fds,
+                password=cmd.password,
+                write_fd=cmd.write_fd,
+                read_fd=cmd.read_fd,
+            )
+        except asyncio.CancelledError:
+            if pane_id is not None:
+                await tabs.close_session(pane_id)
+            await session.close()
+            raise
+        except Exception as exc:
+            cmd.close_pipe()
+            if pane_id is not None:
+                await tabs.close_session(pane_id)
+            await session.close()
+            self.notify(f"Failed to start session: {exc}", severity="error")
+            return
+
+    @on(MenuBar.HostsAction)
+    def on_hosts_menu(self) -> None:
+        def handle(action: str | None) -> None:
+            if action == "add":
+                self._host_add()
+            elif action == "edit":
+                self._host_edit()
+            elif action == "delete":
+                self._host_delete()
+            elif action == "copy":
+                self._host_copy_to_group()
+
+        self.app.push_screen(
+            ActionMenuScreen(
+                "Hosts",
+                [
+                    ("add", "Add host"),
+                    ("edit", "Edit selected"),
+                    ("delete", "Delete selected"),
+                    ("copy", "Copy to group…"),
+                ],
+            ),
+            handle,
+        )
+
+    @on(MenuBar.VaultAction)
+    def on_vault_menu(self) -> None:
+        def handle(action: str | None) -> None:
+            if action == "set":
+                self._vault_edit()
+
+        self.app.push_screen(
+            ActionMenuScreen("Vault", [("set", "Set / update password")]),
+            handle,
+        )
+
+    @on(MenuBar.SessionAction)
+    def on_session_menu(self) -> None:
+        def handle(action: str | None) -> None:
+            if action == "reconnect":
+                self._reconnect()
+            elif action == "close":
+                self.action_close_session()
+
+        self.app.push_screen(
+            ActionMenuScreen(
+                "Session",
+                [("reconnect", "Reconnect"), ("close", "Close")],
+            ),
+            handle,
+        )
+
+    def _selected_host(self) -> Host | None:
+        return self.query_one(HostList).selected_host
+
+    def _selected_group(self) -> str | None:
+        return self.query_one(HostList).selected_group
+
+    def _is_read_only(self, group: str | None) -> bool:
+        return not self.inventory.is_group_writable(group)
+
+    def _writable_groups(self) -> list[str]:
+        return [g.name for g in self.inventory.groups() if g.writable and not g.error]
+
+    def _pick_group(self, then) -> None:
+        """Ask for a destination group, creating it if the name is new."""
+
+        def handle(name: str | None) -> None:
+            if not name:
+                return
+            if name not in self._writable_groups():
+                try:
+                    self.inventory.create_group(name)
+                except SshConfigError as exc:
+                    self.notify(str(exc), severity="error")
+                    return
+            then(name)
+
+        self.app.push_screen(GroupPickerScreen(self._writable_groups()), handle)
+
+    def _host_add(self) -> None:
+        def handle(result: Host | str | None) -> None:
+            if not isinstance(result, Host):
+                return
+
+            def write(group: str) -> None:
+                try:
+                    self.inventory.add(group, result)
+                    self.refresh_hosts()
+                except SshConfigError as exc:
+                    self.notify(str(exc), severity="error")
+
+            self._pick_group(write)
+
+        self.app.push_screen(HostEditModal(is_new=True), handle)
+
+    def _host_copy_to_group(self) -> None:
+        host = self._selected_host()
+        if host is None:
+            self.notify("Select a host first.", severity="warning")
+            return
+        source = self._selected_group()
+        if source is None:
+            return
+
+        def write(group: str) -> None:
+            if group == source:
+                return
+            try:
+                if source == READONLY_GROUP:
+                    self.inventory.adopt(host.alias, group)
+                else:
+                    self.inventory.move(host.alias, source, group)
+                self.refresh_hosts()
+                self.notify(f"{host.alias} → {group}")
+            except SshConfigError as exc:
+                self.notify(str(exc), severity="error")
+
+        self._pick_group(write)
+
+    def _host_edit(self) -> None:
+        host = self._selected_host()
+        if host is None:
+            self.notify("Select a host first.", severity="warning")
+            return
+        group = self._selected_group()
+        if self._is_read_only(group):
+            self.notify(
+                f"{host.alias} is defined in {READONLY_GROUP}, which ghostcrt "
+                "never writes. Use Copy to group to make it editable.",
+                severity="warning",
+            )
+            return
+
+        def handle(result: Host | str | None) -> None:
+            if result is None:
+                return
+            try:
+                if result == "delete":
+                    self.inventory.delete(group, host.alias)
+                elif isinstance(result, Host):
+                    self.inventory.update(group, host.alias, result)
+                self.refresh_hosts()
+            except SshConfigError as exc:
+                self.notify(str(exc), severity="error")
+
+        self.app.push_screen(HostEditModal(host), handle)
+
+    def _host_delete(self) -> None:
+        host = self._selected_host()
+        if host is None:
+            self.notify("Select a host first.", severity="warning")
+            return
+        group = self._selected_group()
+        if self._is_read_only(group):
+            self.notify(
+                f"{host.alias} is defined in {READONLY_GROUP} and is read-only.",
+                severity="warning",
+            )
+            return
+        try:
+            self.inventory.delete(group, host.alias)
+            self.refresh_hosts()
+            self.notify(f"Deleted host block for {host.alias}")
+        except SshConfigError as exc:
+            self.notify(str(exc), severity="error")
+
+    def _vault_edit(self) -> None:
+        host = self._selected_host()
+        if host is None:
+            self.notify("Select a host first.", severity="warning")
+            return
+        has_pw = self.vault.get(host.alias) is not None
+
+        def handle(result: tuple[str, str] | str | None) -> None:
+            if result is None:
+                return
+            try:
+                if result == "delete":
+                    self.vault.update_password(host.alias, None)
+                    self.notify(f"Removed vault password for {host.alias}")
+                elif isinstance(result, tuple) and result[0] == "set":
+                    self.vault.update_password(host.alias, result[1])
+                    self.notify(f"Saved vault password for {host.alias}")
+            except VaultError:
+                self.notify(
+                    "Password change was not saved. Check disk space and permissions.",
+                    severity="error",
+                )
+
+        self.app.push_screen(VaultEditModal(host.alias, has_password=has_pw), handle)
+
+    @work
+    async def _reconnect(self) -> None:
+        tabs = self.query_one(SessionTabs)
+        session = tabs.active_session
+        terminal = tabs.active_terminal
+        if session is None or terminal is None:
+            self.notify("No active session.", severity="warning")
+            return
+        password = self.vault.get(session.alias)
+        if password and not shutil.which("sshpass"):
+            self.notify("sshpass is not installed.", severity="error")
+            return
+        cmd = build_ssh_command(session.alias, password, config=self.ssh_config)
+        try:
+            await session.reconnect(
+                cmd.argv,
+                pass_fds=cmd.pass_fds,
+                password=cmd.password,
+                write_fd=cmd.write_fd,
+                read_fd=cmd.read_fd,
+                before_start=terminal.reset_session,
+            )
+        except Exception as exc:
+            cmd.close_pipe()
+            self.notify(f"Reconnect failed: {exc}", severity="error")

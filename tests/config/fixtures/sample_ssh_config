@@ -1,0 +1,18 @@
+# global
+Host *
+    ServerAliveInterval 60
+
+Host db primary-db
+    HostName 10.0.0.5
+    User deploy
+    Port 22
+    IdentityFile ~/.ssh/id_ed25519
+
+Host *.prod
+    User prod
+
+Host web
+    HostName web.example.com
+    User root
+    # comment kept
+    ForwardAgent yes
