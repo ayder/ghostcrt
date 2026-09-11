@@ -8,7 +8,7 @@ from ghostcrt.config.inventory import READONLY_GROUP, HostInventory
 from ghostcrt.config.ssh_config import SshConfigStore
 from ghostcrt.models import Host
 from ghostcrt.ssh.session import SshSession
-from ghostcrt.ui.screens.host_edit import HostEditModal
+from ghostcrt.ui.screens.host_edit import HostEditModal, HostEditResult
 from ghostcrt.ui.screens.main import MainScreen
 from ghostcrt.ui.widgets.host_list import HostList
 
@@ -19,6 +19,15 @@ class FakeVault:
 
     def get(self, alias):
         return self.password
+
+    def profiles(self):
+        return []
+
+    def profile_for(self, alias):
+        return None
+
+    def update_assignment(self, alias, profile_id):
+        return None
 
 
 def make_app(tmp_path, *, config=None, password=None):
@@ -70,7 +79,7 @@ async def test_actions_target_selected_writable_duplicate(tmp_path, monkeypatch,
             screen._host_edit()
             await pilot.pause()
             assert isinstance(app.screen, HostEditModal)
-            app.screen.dismiss(Host(alias="duplicate", user="edited"))
+            app.screen.dismiss(HostEditResult(Host(alias="duplicate", user="edited"), None))
         else:
             monkeypatch.setattr(screen, "_pick_group", lambda then: then("destination"))
             screen._host_copy_to_group()

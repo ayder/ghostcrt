@@ -20,7 +20,7 @@ from ghostcrt.ssh.command import build_ssh_command
 from ghostcrt.ssh.session import SshSession
 from ghostcrt.ui.screens.action_menu import ActionMenuScreen
 from ghostcrt.ui.screens.group_picker import GroupPickerScreen
-from ghostcrt.ui.screens.host_edit import HostEditModal
+from ghostcrt.ui.screens.host_edit import HostEditModal, HostEditResult
 from ghostcrt.ui.screens.include_setup import IncludeSetupModal
 from ghostcrt.ui.screens.vault_edit import VaultEditModal
 from ghostcrt.ui.widgets.host_list import HostList
@@ -28,6 +28,10 @@ from ghostcrt.ui.widgets.menu_bar import MenuBar
 from ghostcrt.ui.widgets.session_tabs import SessionTabs
 from ghostcrt.ui.widgets.terminal import TerminalWidget
 from ghostcrt.vault.vault import Vault, VaultError
+
+ASSIGNMENT_NOT_SAVED = (
+    "Host saved; profile assignment was not. Use Vault → Assign profile to selected host… to retry."
+)
 
 
 class MainScreen(Screen):
@@ -241,20 +245,29 @@ class MainScreen(Screen):
         self.app.push_screen(GroupPickerScreen(self._writable_groups()), handle)
 
     def _host_add(self) -> None:
-        def handle(result: Host | str | None) -> None:
-            if not isinstance(result, Host):
+        def handle(result: HostEditResult | str | None) -> None:
+            if not isinstance(result, HostEditResult):
                 return
 
             def write(group: str) -> None:
                 try:
-                    self.inventory.add(group, result)
+                    self.inventory.add(group, result.host)
                     self.refresh_hosts()
                 except SshConfigError as exc:
                     self.notify(str(exc), severity="error")
+                    return
+                if result.profile is None:
+                    return
+                try:
+                    self.vault.update_assignment(result.host.aliases[0], result.profile)
+                except VaultError:
+                    self.notify(ASSIGNMENT_NOT_SAVED, severity="error")
 
             self._pick_group(write)
 
-        self.app.push_screen(HostEditModal(is_new=True), handle)
+        self.app.push_screen(
+            HostEditModal(is_new=True, profiles=self.vault.profiles()), handle
+        )
 
     def _host_copy_to_group(self) -> None:
         host = self._selected_host()
@@ -294,19 +307,48 @@ class MainScreen(Screen):
             )
             return
 
-        def handle(result: Host | str | None) -> None:
+        selected = host.alias
+
+        def handle(result: HostEditResult | str | None) -> None:
             if result is None:
                 return
             try:
                 if result == "delete":
-                    self.inventory.delete(group, host.alias)
-                elif isinstance(result, Host):
-                    self.inventory.update(group, host.alias, result)
+                    self.inventory.delete(group, selected)
+                elif isinstance(result, HostEditResult):
+                    self.inventory.update(group, selected, result.host)
                 self.refresh_hosts()
             except SshConfigError as exc:
                 self.notify(str(exc), severity="error")
+                return
+            if isinstance(result, HostEditResult):
+                self._write_edit_assignment(selected, result)
 
-        self.app.push_screen(HostEditModal(host), handle)
+        self.app.push_screen(
+            HostEditModal(
+                host,
+                profiles=self.vault.profiles(),
+                profile=self.vault.profile_for(selected),
+            ),
+            handle,
+        )
+
+    def _write_edit_assignment(self, selected: str, result: HostEditResult) -> None:
+        """Persist the edited host's assignment against the alias that was highlighted.
+
+        A rename that drops the highlighted alias moves the assignment to the new
+        block's first alias. Those are two writes with no rollback between them:
+        if the second fails the old alias is already unassigned, which the notify
+        text tells the operator how to repair.
+        """
+        try:
+            if selected in result.host.aliases:
+                self.vault.update_assignment(selected, result.profile)
+            else:
+                self.vault.update_assignment(selected, None)
+                self.vault.update_assignment(result.host.aliases[0], result.profile)
+        except VaultError:
+            self.notify(ASSIGNMENT_NOT_SAVED, severity="error")
 
     def _host_delete(self) -> None:
         host = self._selected_host()
