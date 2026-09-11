@@ -126,7 +126,7 @@ directives**, one `Directive value` entry per line.
 ## Vault profiles
 
 A profile is a named password, created with **Vault → Create / update profile…**. Assign
-one from the host editor's dropdown or **Vault → Assign profile to selected host…**; `(none)` removes it.
+one from the host editor's dropdown or **Vault → Assign profile to selected host…**; `(none)` removes the assignment.
 
 ## Security notes
 

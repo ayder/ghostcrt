@@ -54,6 +54,15 @@ def _record_notifications(screen):
     return calls
 
 
+def _tree_snapshot(tmp_path: Path) -> dict[str, bytes]:
+    """Snapshot every include file's name/bytes plus the top-level config's bytes."""
+
+    includes_dir = tmp_path / "includes"
+    snapshot = {p.name: p.read_bytes() for p in includes_dir.iterdir()}
+    snapshot["config"] = (tmp_path / "config").read_bytes()
+    return snapshot
+
+
 async def highlight(pilot, group):
     tree = pilot.app.screen.query_one(HostList).query_one(Tree)
     node = next(n for n in tree.root.children if n.data.group == group)
@@ -71,9 +80,7 @@ class TestPickGroup:
             screen = app.screen
             notifications = _record_notifications(screen)
 
-            includes_dir = tmp_path / "includes"
-            before_listing = sorted(p.name for p in includes_dir.iterdir())
-            before_bytes = (includes_dir / "production.conf").read_bytes()
+            before = _tree_snapshot(tmp_path)
 
             screen._host_add()
             await pilot.pause()
@@ -85,8 +92,7 @@ class TestPickGroup:
             await pilot.pause()
 
             assert ("Host not saved: no group chosen.", "warning") in notifications
-            assert (includes_dir / "production.conf").read_bytes() == before_bytes
-            assert sorted(p.name for p in includes_dir.iterdir()) == before_listing
+            assert _tree_snapshot(tmp_path) == before
 
     async def test_cancelled_copy_notifies(self, tmp_path):
         inv = inventory(tmp_path)
@@ -96,8 +102,7 @@ class TestPickGroup:
             screen = app.screen
             notifications = _record_notifications(screen)
 
-            includes_dir = tmp_path / "includes"
-            before_bytes = (includes_dir / "production.conf").read_bytes()
+            before = _tree_snapshot(tmp_path)
 
             await highlight(pilot, READONLY_GROUP)
 
@@ -108,7 +113,7 @@ class TestPickGroup:
             await pilot.pause()
 
             assert ("Host not saved: no group chosen.", "warning") in notifications
-            assert (includes_dir / "production.conf").read_bytes() == before_bytes
+            assert _tree_snapshot(tmp_path) == before
 
     async def test_escape_cancels_add_with_warning(self, tmp_path):
         inv = inventory(tmp_path)
@@ -118,8 +123,7 @@ class TestPickGroup:
             screen = app.screen
             notifications = _record_notifications(screen)
 
-            includes_dir = tmp_path / "includes"
-            before_bytes = (includes_dir / "production.conf").read_bytes()
+            before = _tree_snapshot(tmp_path)
 
             screen._host_add()
             await pilot.pause()
@@ -131,7 +135,7 @@ class TestPickGroup:
             await pilot.pause()
 
             assert ("Host not saved: no group chosen.", "warning") in notifications
-            assert (includes_dir / "production.conf").read_bytes() == before_bytes
+            assert _tree_snapshot(tmp_path) == before
 
     async def test_typed_new_group_is_created(self, tmp_path):
         inv = inventory(tmp_path)
