@@ -8,8 +8,8 @@ from ghostcrt.vault.vault import Vault, WrongMasterKey
 def test_create_unlock_roundtrip(tmp_path: Path):
     path = tmp_path / "vault.enc"
     v = Vault.create(path, "master-key")
-    v.set("db", "pw1")
-    v.save()
+    v.update_profile("db", "pw1")
+    v.update_assignment("db", "db")
     assert path.exists()
     assert (path.stat().st_mode & 0o777) == 0o600
 
@@ -28,9 +28,9 @@ def test_wrong_key(tmp_path: Path):
 def test_delete_and_missing(tmp_path: Path):
     path = tmp_path / "vault.enc"
     v = Vault.create(path, "m")
-    v.set("a", "1")
-    v.delete("a")
-    v.save()
+    v.update_profile("a", "1")
+    v.update_assignment("a", "a")
+    v.update_profile("a", None)
     v2 = Vault.unlock(path, "m")
     assert v2.get("a") is None
 
