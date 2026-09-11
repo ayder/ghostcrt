@@ -34,6 +34,7 @@ NO_PROFILES_YET = "No profiles yet. Create one first."
 ASSIGNMENT_NOT_SAVED = (
     "Host saved; profile assignment was not. Use Vault → Assign profile to selected host… to retry."
 )
+NO_GROUP_CHOSEN = "Host not saved: no group chosen."
 
 
 class MainScreen(Screen):
@@ -245,7 +246,11 @@ class MainScreen(Screen):
         """Ask for a destination group, creating it if the name is new."""
 
         def handle(name: str | None) -> None:
-            if not name:
+            # None is the only cancel: the picker never answers with "". Say so,
+            # because the caller was about to write a host the operator had
+            # already filled in, and dropping it in silence looks like a bug.
+            if name is None:
+                self.notify(NO_GROUP_CHOSEN, severity="warning")
                 return
             if name not in self._writable_groups():
                 try:

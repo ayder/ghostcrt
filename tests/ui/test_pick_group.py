@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from textual.app import App
-from textual.widgets import Tree
+from textual.widgets import OptionList, Tree
 
 from ghostcrt.config.inventory import READONLY_GROUP, HostInventory
 from ghostcrt.config.ssh_config import SshConfigStore
@@ -158,3 +158,78 @@ class TestPickGroup:
             assert new_group_path.exists()
             assert SshConfigStore(new_group_path).get("h1") is not None
             assert not any(severity == "warning" for _msg, severity in notifications)
+
+    async def test_add_three_hosts_by_highlighting_the_group(self, tmp_path):
+        inv = inventory(tmp_path)
+        app = screen_app(inv)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+
+            includes_dir = tmp_path / "includes"
+
+            for i in (1, 2, 3):
+                screen._host_add()
+                await pilot.pause()
+                assert isinstance(app.screen, HostEditModal)
+                app.screen.dismiss(HostEditResult(Host(alias=f"h{i}"), None))
+                await pilot.pause()
+                assert isinstance(app.screen, GroupPickerScreen)
+                app.screen.query_one("#group-options", OptionList).highlighted = 0
+                await pilot.pause()
+                await pilot.click("#create")
+                await pilot.pause()
+
+                assert SshConfigStore(includes_dir / "production.conf").get(f"h{i}") is not None
+
+            tree = screen.query_one(HostList).query_one(Tree)
+            prod_node = next(n for n in tree.root.children if n.data.group == "production")
+            assert len(prod_node.children) == 4
+            aliases = [child.data.host.alias for child in prod_node.children]
+            assert aliases == ["srv1", "h1", "h2", "h3"]
+
+    async def test_copy_by_highlighting_the_group(self, tmp_path):
+        inv = inventory(tmp_path)
+        app = screen_app(inv)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+
+            config_path = tmp_path / "config"
+            before_bytes = config_path.read_bytes()
+
+            await highlight(pilot, READONLY_GROUP)
+
+            screen._host_copy_to_group()
+            await pilot.pause()
+            assert isinstance(app.screen, GroupPickerScreen)
+            app.screen.query_one("#group-options", OptionList).highlighted = 0
+            await pilot.pause()
+            await pilot.click("#create")
+            await pilot.pause()
+
+            includes_dir = tmp_path / "includes"
+            assert SshConfigStore(includes_dir / "production.conf").get("bastion") is not None
+            assert config_path.read_bytes() == before_bytes
+
+    async def test_move_by_highlighting_the_group(self, tmp_path):
+        inv = inventory(tmp_path)
+        app = screen_app(inv)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+
+            await highlight(pilot, "production")
+
+            screen._host_copy_to_group()
+            await pilot.pause()
+            assert isinstance(app.screen, GroupPickerScreen)
+            staging_index = screen._writable_groups().index("staging")
+            app.screen.query_one("#group-options", OptionList).highlighted = staging_index
+            await pilot.pause()
+            await pilot.click("#create")
+            await pilot.pause()
+
+            includes_dir = tmp_path / "includes"
+            assert SshConfigStore(includes_dir / "staging.conf").get("srv1") is not None
+            assert SshConfigStore(includes_dir / "production.conf").get("srv1") is None
