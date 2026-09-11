@@ -32,8 +32,9 @@ from ghostcrt.ui.screens.help import HelpScreen
 from ghostcrt.ui.screens.host_edit import HostEditModal
 from ghostcrt.ui.screens.include_setup import IncludeSetupModal
 from ghostcrt.ui.screens.main import MainScreen
+from ghostcrt.ui.screens.profile_edit import ProfileEditModal
+from ghostcrt.ui.screens.profile_picker import ProfilePickerScreen
 from ghostcrt.ui.screens.unlock import UnlockScreen
-from ghostcrt.ui.screens.vault_edit import VaultEditModal
 from ghostcrt.ui.widgets.host_list import HostList
 
 ANSI_PALETTES = ["ansi-dark", "ansi-light"]
@@ -74,8 +75,9 @@ OVERLAYS = [
     ("#help-box", HelpScreen),
     ("#host-edit-box", lambda: HostEditModal(Host(alias="srv1"), is_new=False)),
     ("#include-box", lambda: IncludeSetupModal(_tmp() / "config", _tmp() / "includes")),
-    ("#vault-edit-box", lambda: VaultEditModal("srv1")),
     ("#unlock-box", lambda: UnlockScreen(_tmp() / "vault.json")),
+    ("#profile-edit-box", lambda: ProfileEditModal(profiles=[])),
+    ("#profile-picker-box", lambda: ProfilePickerScreen("Assign", ["ops"], allow_none=True)),
 ]
 
 
