@@ -29,7 +29,7 @@ macOS: `brew install hudochenkov/sshpass/sshpass` (or your preferred tap)
 ## Install
 
 ```bash
-uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.1.0/ghostcrt-0.1.0-py3-none-any.whl
+uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.2.0/ghostcrt-0.2.0-py3-none-any.whl
 ghostcrt
 ```
 
@@ -125,23 +125,8 @@ directives**, one `Directive value` entry per line.
 
 ## Vault profiles
 
-A profile is a named password. Create one with **Vault → Create / update profile…**:
-type a profile id and the password. Saving under an id that already exists warns
-once and replaces that password on the next Save.
-
-Assign a profile to a host in either of two places:
-
-- the host editor's **Vault password profile** dropdown, just below **User**;
-- **Vault → Assign profile to selected host…**, which also works for the read-only
-  hosts that come from `~/.ssh/config` — an assignment lives in the vault, and
-  nothing about profiles is ever written to an SSH config file.
-
-Choosing `(none)` removes the assignment and leaves the profile itself alone.
-**Vault → Delete profile…** removes a profile *and* unassigns every host that used
-it; those hosts connect without a password from then on.
-
-Assignments are per highlighted alias. A block `Host a b c` shows three entries in
-the sidebar, and each one carries its own assignment.
+A profile is a named password, created with **Vault → Create / update profile…**. Assign
+one from the host editor's dropdown or **Vault → Assign profile to selected host…**; `(none)` removes the assignment.
 
 ## Security notes
 
@@ -149,9 +134,7 @@ the sidebar, and each one carries its own assignment.
 - Vault file mode `0600`; config dir `0700`.
 - No recovery mechanism by design.
 - Host-key prompts are handled by real `ssh` inside the terminal widget.
-- Vault files written by this version are format 2; ghostcrt 0.1.0 cannot open
-  them. Existing vaults are migrated on first change: each host's password
-  becomes a profile named after the host.
+- Vault files are format 2; ghostcrt 0.1.0 cannot open them, and existing vaults migrate on first change.
 
 ## Limitations (v1)
 

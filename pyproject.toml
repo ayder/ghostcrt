@@ -1,6 +1,6 @@
 [project]
 name = "ghostcrt"
-version = "0.1.0"
+version = "0.2.0"
 description = "Terminal UI for managing multiple SSH sessions with an encrypted password vault"
 readme = "README.md"
 requires-python = ">=3.12"

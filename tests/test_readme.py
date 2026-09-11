@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -6,11 +7,40 @@ class TestReadme:
         readme_path = Path(__file__).resolve().parents[1] / "README.md"
         text = readme_path.read_text()
 
-        assert "## Vault profiles" in text
-        assert "Create / update profile…" in text
-        assert "Assign profile to selected host…" in text
+        assert "Password profiles" in text
         assert "format 2" in text
-        assert "Multi-alias vault entries are per selected alias" in text
 
-        assert text.index("## Groups") < text.index("## Vault profiles")
-        assert text.index("## Vault profiles") < text.index("## Security notes")
+        start_match = re.search(r"^## Vault profiles$", text, re.MULTILINE)
+        assert start_match is not None
+
+        later_starts = [
+            m.start()
+            for m in re.finditer(r"^## ", text, re.MULTILINE)
+            if m.start() > start_match.start()
+        ]
+        section_end = min(later_starts) if later_starts else len(text)
+        section = text[start_match.start() : section_end]
+
+        assert len(section.splitlines()) <= 5
+
+        assert "Choose a group" not in text
+        assert "highlighted group" not in text
+
+
+class TestChangelog:
+    def test_latest_entry_names_the_group_picker_fix(self):
+        """The newest section (Unreleased, or the top version once released) names both changes."""
+        path = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
+
+        assert path.is_file()
+
+        text = path.read_text()
+
+        heading_starts = [m.start() for m in re.finditer(r"^## ", text, re.MULTILINE)]
+        assert heading_starts
+        section_end = heading_starts[1] if len(heading_starts) > 1 else len(text)
+        section = text[heading_starts[0] : section_end]
+
+        assert "group picker" in section.lower()
+        assert "profile" in section.lower()
+        assert len(section.splitlines()) <= 12
