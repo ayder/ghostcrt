@@ -152,6 +152,37 @@ class TestProfileEditModal:
             await _press(pilot, "#save")
             assert results == [("ops", "s3")]
 
+    async def test_editing_the_id_text_forgets_the_warning(self):
+        results: list[tuple[str, str] | None] = []
+
+        class TestApp(App[None]):
+            def on_mount(self):
+                self.push_screen(ProfileEditModal(profiles=["ops"]), results.append)
+
+        app = TestApp()
+        async with app.run_test() as pilot:
+            screen = app.screen
+            screen.query_one("#profile-id").value = "ops"
+            screen.query_one("#password").value = "s3"
+            await pilot.pause()
+            await _press(pilot, "#save")
+            assert _error_text(screen) == "Existing profile: password will be replaced."
+            assert app.screen is screen
+            assert results == []
+
+            # Same stripped id ("ops"), but the input's text itself changed
+            # (trailing space added): the warning must be forgotten and
+            # re-armed, not carried over because the normalized id matches.
+            screen.query_one("#profile-id").value = "ops "
+            await pilot.pause()
+            await _press(pilot, "#save")
+            assert _error_text(screen) == "Existing profile: password will be replaced."
+            assert app.screen is screen
+            assert results == []
+
+            await _press(pilot, "#save")
+            assert results == [("ops", "s3")]
+
 
 class TestProfilePicker:
     async def test_options_and_result_object(self):
