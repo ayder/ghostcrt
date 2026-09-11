@@ -100,3 +100,23 @@ class TestGroupPicker:
             app.screen.query_one("#new-group", Input).value = ""
             await pilot.pause()
             assert button.label == "Choose"
+
+    async def test_typing_clears_the_choose_message(self):
+        chosen: list[str | None] = []
+
+        class TestApp(App[None]):
+            def on_mount(self):
+                self.push_screen(GroupPickerScreen(["production"]), chosen.append)
+
+        app = TestApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.click("#create")
+            await pilot.pause()
+            error = app.screen.query_one("#group-picker-error", Static)
+            assert str(error.content) == "Choose a group or type a new name."
+            app.screen.query_one("#new-group", Input).value = "x"
+            await pilot.pause()
+            assert str(error.content) == ""
+
+        assert chosen == []

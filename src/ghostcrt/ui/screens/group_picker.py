@@ -81,6 +81,8 @@ class GroupPickerScreen(ModalScreen[str | None]):
         self.query_one("#create", Button).label = (
             LABEL_CREATE if event.value.strip() else LABEL_CHOOSE
         )
+        # A "choose or type" message is answered by typing; do not leave it standing.
+        self._error("")
 
     @on(Button.Pressed, "#create")
     def create(self) -> None:
