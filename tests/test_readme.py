@@ -28,20 +28,18 @@ class TestReadme:
 
 
 class TestChangelog:
-    def test_unreleased_entry_names_the_group_picker_fix(self):
+    def test_latest_entry_names_the_group_picker_fix(self):
+        """The newest section (Unreleased, or the top version once released) names both changes."""
         path = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
 
         assert path.is_file()
 
         text = path.read_text()
 
-        unreleased_match = re.search(r"^## Unreleased", text, re.MULTILINE)
-        assert unreleased_match is not None
-
         heading_starts = [m.start() for m in re.finditer(r"^## ", text, re.MULTILINE)]
-        later_starts = [s for s in heading_starts if s > unreleased_match.start()]
-        section_end = min(later_starts) if later_starts else len(text)
-        section = text[unreleased_match.start() : section_end]
+        assert heading_starts
+        section_end = heading_starts[1] if len(heading_starts) > 1 else len(text)
+        section = text[heading_starts[0] : section_end]
 
         assert "group picker" in section.lower()
         assert "profile" in section.lower()

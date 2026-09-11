@@ -29,7 +29,7 @@ macOS: `brew install hudochenkov/sshpass/sshpass` (or your preferred tap)
 ## Install
 
 ```bash
-uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.1.0/ghostcrt-0.1.0-py3-none-any.whl
+uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.2.0/ghostcrt-0.2.0-py3-none-any.whl
 ghostcrt
 ```
 
