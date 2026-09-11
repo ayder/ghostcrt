@@ -111,6 +111,14 @@ read-only, marked `🔒`. Use **Hosts → Copy to group…** to adopt one into a
 group, where it becomes editable. Because the include is read first, the copy
 wins; the original is marked `⊘ <group>` to show it has been shadowed.
 
+Adding or copying a host asks which group it belongs to. Answer either way:
+highlight an existing group in the list and press **Choose**, or type a new
+name and press **Create** — the button says which of the two it will do, and
+a typed name wins over a highlighted group. Pressing it with nothing typed
+and nothing highlighted keeps the dialog open and asks you to pick.
+Cancel discards the new host and says so, so a cancelled dialog never loses
+work you have already entered.
+
 ### Advanced host settings
 
 The host editor includes optional fields for `ProxyCommand`, `IdentitiesOnly`,
