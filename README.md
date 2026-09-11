@@ -15,6 +15,8 @@ Licensed under [GNU GPLv3](LICENSE) (GPL-3.0-only).
 - Encrypted local vault for SSH passwords (Argon2id + AES-256-GCM)
 - Password delivery via `sshpass -d` (never in argv / env / disk)
 - In-app host config and vault management
+- Password profiles: store a password once under a profile id and pick it per
+  host from a dropdown
 - Textual built-in themes (`Ctrl+P`), applied to both the UI and terminal palette
 
 ## System dependencies
@@ -121,12 +123,35 @@ The **Forwarding** area accepts one `LocalForward`, `RemoteForward`, or
 type. Any other host-level SSH option can be entered in **Additional
 directives**, one `Directive value` entry per line.
 
+## Vault profiles
+
+A profile is a named password. Create one with **Vault → Create / update profile…**:
+type a profile id and the password. Saving under an id that already exists warns
+once and replaces that password on the next Save.
+
+Assign a profile to a host in either of two places:
+
+- the host editor's **Vault password profile** dropdown, just below **User**;
+- **Vault → Assign profile to selected host…**, which also works for the read-only
+  hosts that come from `~/.ssh/config` — an assignment lives in the vault, and
+  nothing about profiles is ever written to an SSH config file.
+
+Choosing `(none)` removes the assignment and leaves the profile itself alone.
+**Vault → Delete profile…** removes a profile *and* unassigns every host that used
+it; those hosts connect without a password from then on.
+
+Assignments are per highlighted alias. A block `Host a b c` shows three entries in
+the sidebar, and each one carries its own assignment.
+
 ## Security notes
 
 - Master password is never stored. Lost key ⇒ **Reset vault…** and re-enter secrets.
 - Vault file mode `0600`; config dir `0700`.
 - No recovery mechanism by design.
 - Host-key prompts are handled by real `ssh` inside the terminal widget.
+- Vault files written by this version are format 2; ghostcrt 0.1.0 cannot open
+  them. Existing vaults are migrated on first change: each host's password
+  becomes a profile named after the host.
 
 ## Limitations (v1)
 
