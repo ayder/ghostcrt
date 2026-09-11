@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import ClassVar
 
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static, TextArea
+from textual.widgets import Button, Input, Label, Select, Static, TextArea
 
 from ghostcrt.models import Host, SshOptionValue
 
@@ -110,8 +111,22 @@ def _format_directives(
     return "\n".join(rows)
 
 
-class HostEditModal(ModalScreen[Host | str | None]):
-    """Edit a Host block. Returns Host on save, 'delete' on delete, None on cancel."""
+@dataclass
+class HostEditResult:
+    """What the editor returns on save: the block, and the chosen profile id.
+
+    ``profile`` is a vault profile id, never a password.
+    """
+
+    host: Host
+    profile: str | None = None
+
+
+class HostEditModal(ModalScreen[HostEditResult | str | None]):
+    """Edit a Host block.
+
+    Returns HostEditResult on save, 'delete' on delete, None on cancel.
+    """
 
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("escape", "dismiss", "Cancel"),
@@ -151,10 +166,20 @@ class HostEditModal(ModalScreen[Host | str | None]):
     }
     """
 
-    def __init__(self, host: Host | None = None, *, is_new: bool = False, **kwargs) -> None:
+    def __init__(
+        self,
+        host: Host | None = None,
+        *,
+        is_new: bool = False,
+        profiles: list[str] | None = None,
+        profile: str | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.host = host
         self.is_new = is_new or host is None
+        self.profiles = list(profiles or [])
+        self.profile = profile
 
     def compose(self) -> ComposeResult:
         h = self.host
@@ -169,6 +194,14 @@ class HostEditModal(ModalScreen[Host | str | None]):
                 yield Input(value=(h.hostname or "") if h else "", id="hostname")
                 yield Label("User")
                 yield Input(value=(h.user or "") if h else "", id="user")
+                yield Label("Vault password profile")
+                yield Select(
+                    [(name, name) for name in self.profiles],
+                    id="vault-profile",
+                    allow_blank=True,
+                    prompt="(none)",
+                    value=self.profile if self.profile in self.profiles else Select.NULL,
+                )
                 yield Label("Port")
                 yield Input(value=str(h.port) if h and h.port is not None else "", id="port")
                 yield Label("Identity files (one per line)")
@@ -296,11 +329,16 @@ class HostEditModal(ModalScreen[Host | str | None]):
             extra=extra,
         )
 
+    def _chosen_profile(self) -> str | None:
+        """The selected profile id, or None when the dropdown sits on ``(none)``."""
+        select = self.query_one("#vault-profile", Select)
+        return None if select.is_blank() else str(select.value)
+
     @on(Button.Pressed, "#save")
     def save(self) -> None:
         host = self._build_host()
         if host is not None:
-            self.dismiss(host)
+            self.dismiss(HostEditResult(host, self._chosen_profile()))
 
     @on(Button.Pressed, "#delete")
     def delete(self) -> None:

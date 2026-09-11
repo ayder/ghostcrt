@@ -61,22 +61,44 @@ def test_runtime_kdf_failure_is_a_safe_vault_error(tmp_path, monkeypatch):
         assert "synthetic" not in str(exc.value)
 
 
-@pytest.mark.parametrize("replacement", [None, "new-password"])
-def test_failed_password_save_restores_memory_and_disk(tmp_path, monkeypatch, replacement):
-    path = tmp_path / "vault.enc"
-    vault = Vault.create(path, "master")
-    vault.update_password("host", "original")
-    original = path.read_bytes()
+class TestSaveFailure:
+    @pytest.mark.parametrize("replacement", [None, "new-password"])
+    def test_failed_profile_save_restores_memory_and_disk(
+        self, tmp_path, monkeypatch, replacement
+    ):
+        path = tmp_path / "vault.enc"
+        vault = Vault.create(path, "master")
+        vault.update_profile("host", "original")
+        original = path.read_bytes()
 
-    def fail(*args, **kwargs):
-        raise OSError("simulated disk failure")
+        def fail(*args, **kwargs):
+            raise OSError("simulated disk failure")
 
-    monkeypatch.setattr("ghostcrt.vault.vault.os.replace", fail)
-    with pytest.raises(VaultError):
-        vault.update_password("host", replacement)
-    assert vault.get("host") == "original"
-    assert path.read_bytes() == original
-    assert not list(tmp_path.glob(".vault-*"))
+        monkeypatch.setattr("ghostcrt.vault.vault.os.replace", fail)
+        with pytest.raises(VaultError):
+            vault.update_profile("host", replacement)
+        assert vault.get_profile("host") == "original"
+        assert path.read_bytes() == original
+        assert not list(tmp_path.glob(".vault-*"))
+
+    @pytest.mark.parametrize("target", ["p2", None])
+    def test_failed_assignment_save_restores_memory_and_disk(self, tmp_path, monkeypatch, target):
+        path = tmp_path / "vault.enc"
+        vault = Vault.create(path, "master")
+        vault.update_profile("host", "original")
+        vault.update_profile("p2", "x")
+        vault.update_assignment("h", "host")
+        before = path.read_bytes()
+
+        def fail(*args, **kwargs):
+            raise OSError("simulated disk failure")
+
+        monkeypatch.setattr("ghostcrt.vault.vault.os.replace", fail)
+        with pytest.raises(VaultError):
+            vault.update_assignment("h", target)
+        assert vault.profile_for("h") == "host"
+        assert path.read_bytes() == before
+        assert not list(tmp_path.glob(".vault-*"))
 
 
 def test_atomic_save_does_not_change_existing_parent_permissions(tmp_path):
