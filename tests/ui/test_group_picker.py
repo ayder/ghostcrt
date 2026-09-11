@@ -1,7 +1,7 @@
 from textual.app import App
-from textual.widgets import Input, OptionList, Static
+from textual.widgets import Button, Input, OptionList, Static
 
-from ghostcrt.ui.screens.group_picker import GroupPickerScreen
+from ghostcrt.ui.screens.group_picker import LABEL_CHOOSE, LABEL_CREATE, GroupPickerScreen
 
 
 class TestGroupPicker:
@@ -79,3 +79,24 @@ class TestGroupPicker:
             await pilot.pause()
 
         assert chosen == ["brand-new"]
+
+    async def test_button_label_follows_state(self):
+        chosen: list[str | None] = []
+
+        class TestApp(App[None]):
+            def on_mount(self):
+                self.push_screen(GroupPickerScreen(["production"]), chosen.append)
+
+        app = TestApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            button = app.screen.query_one("#create", Button)
+            assert button.label == LABEL_CHOOSE
+
+            app.screen.query_one("#new-group", Input).value = "x"
+            await pilot.pause()
+            assert button.label == LABEL_CREATE
+
+            app.screen.query_one("#new-group", Input).value = ""
+            await pilot.pause()
+            assert button.label == LABEL_CHOOSE
