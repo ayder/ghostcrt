@@ -123,7 +123,7 @@ class MainScreen(Screen):
         self.action_focus_hosts()
 
     def action_close_session(self) -> None:
-        self.run_worker(self.query_one(SessionTabs).close_active())
+        self.query_one(SessionTabs).request_close_active()
 
     @on(HostList.HostSelected)
     def on_host_selected(self, event: HostList.HostSelected) -> None:

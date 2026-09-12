@@ -28,18 +28,17 @@ class TestReadme:
 
 
 class TestChangelog:
-    def test_latest_entry_names_the_group_picker_fix(self):
-        """The newest section (Unreleased, or the top version once released) names both changes."""
+    def test_020_entry_names_the_group_picker_fix(self):
+        """Keep the 0.2.0 release notes intact as newer releases are added."""
         path = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
 
         assert path.is_file()
 
         text = path.read_text()
 
-        heading_starts = [m.start() for m in re.finditer(r"^## ", text, re.MULTILINE)]
-        assert heading_starts
-        section_end = heading_starts[1] if len(heading_starts) > 1 else len(text)
-        section = text[heading_starts[0] : section_end]
+        entry = re.search(r"^## 0\.2\.0\b.*?(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
+        assert entry is not None
+        section = entry.group()
 
         assert "group picker" in section.lower()
         assert "profile" in section.lower()

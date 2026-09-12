@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import asyncio
 
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.widgets import TabbedContent, TabPane
 
 from ghostcrt.models import SessionState
 from ghostcrt.ssh.session import SshSession
+from ghostcrt.ui.screens.confirm_close import ConfirmCloseScreen
+from ghostcrt.ui.widgets.session_tab import SessionTab, SessionTabbedContent
 from ghostcrt.ui.widgets.terminal import TerminalWidget
+from ghostcrt.ui.widgets.terminal_pane import TerminalPane
 
 
 def tab_title(alias: str, state: SessionState, exit_code: int | None) -> str:
@@ -35,9 +39,14 @@ class SessionTabs(Container):
         self._counter = 0
         self._close_lock = asyncio.Lock()
         self._sessions_closing = False
+        self._close_prompt_pending = False
 
     def compose(self) -> ComposeResult:
-        yield TabbedContent(id="session-tabs")
+        yield SessionTabbedContent(id="session-tabs")
+
+    @property
+    def has_live_sessions(self) -> bool:
+        return any(s.state != SessionState.DISCONNECTED for s in self._sessions.values())
 
     @property
     def active_session(self) -> SshSession | None:
@@ -66,20 +75,21 @@ class SessionTabs(Container):
             pane_id = f"sess-{self._counter}"
             self._sessions[pane_id] = session
             title = tab_title(session.alias, session.state, session.exit_code)
-            tabs = self.query_one("#session-tabs", TabbedContent)
+            tabs = self.query_one("#session-tabs", SessionTabbedContent)
             terminal = TerminalWidget(session, id=f"term-{pane_id}")
-            pane = TabPane(title, terminal, id=pane_id)
+            pane = TabPane(title, TerminalPane(terminal), id=pane_id)
 
             def on_state(state: SessionState) -> None:
                 try:
                     tab = tabs.get_tab(pane_id)
-                    tab.label = tab_title(session.alias, state, session.exit_code)
+                    if isinstance(tab, SessionTab):
+                        tab.set_title(tab_title(session.alias, state, session.exit_code))
                 except Exception:
                     pass
 
             session.on_state = on_state
             try:
-                await tabs.add_pane(pane)
+                await tabs.add_session_pane(pane, title)
             except BaseException:
                 self._sessions.pop(pane_id, None)
                 if session.on_state == on_state:
@@ -87,7 +97,9 @@ class SessionTabs(Container):
                 session.on_output = None
                 raise
             tabs.active = pane_id
-            tabs.get_tab(pane_id).label = tab_title(session.alias, session.state, session.exit_code)
+            tab = tabs.get_tab(pane_id)
+            assert isinstance(tab, SessionTab)
+            tab.set_title(tab_title(session.alias, session.state, session.exit_code))
 
             # Await one completed layout pass. Mounting a pane is awaitable,
             # but its reactive activation may not have assigned geometry yet.
@@ -106,6 +118,38 @@ class SessionTabs(Container):
             else:
                 after_layout()
             return pane_id
+
+    @on(SessionTab.CloseRequested)
+    def on_tab_close_requested(self, message: SessionTab.CloseRequested) -> None:
+        message.stop()
+        self.request_close(message.pane_id)
+
+    def request_close_active(self) -> None:
+        active = self.query_one("#session-tabs", TabbedContent).active
+        if active:
+            self.request_close(str(active))
+
+    def request_close(self, pane_id: str) -> None:
+        session = self._sessions.get(pane_id)
+        if session is None or self._sessions_closing or self._close_prompt_pending:
+            return
+        if session.state == SessionState.DISCONNECTED:
+            self.run_worker(self.close_session(pane_id))
+            return
+        self._close_prompt_pending = True
+
+        def confirmed(close: bool) -> None:
+            self._close_prompt_pending = False
+            if close:
+                self.run_worker(self.close_session(pane_id))
+
+        self.app.push_screen(
+            ConfirmCloseScreen(
+                f"Session {session.alias} is still running or connecting. "
+                "Closing it will disconnect SSH. Close this session?"
+            ),
+            confirmed,
+        )
 
     async def close_active(self) -> None:
         tabs = self.query_one("#session-tabs", TabbedContent)
