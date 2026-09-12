@@ -80,7 +80,20 @@ async def open_terminal(pilot, alias: str) -> tuple[SshSession, TerminalWidget]:
     session = SshSession(alias)
     await pilot.app.screen.query_one(SessionTabs).add_session(session)
     await pilot.pause()
-    return session, pilot.app.screen.query_one(TerminalWidget)
+    terminal = pilot.app.screen.query_one(TerminalWidget)
+    await wait_for_frame(pilot, terminal)
+    return session, terminal
+
+
+async def wait_for_frame(pilot, terminal: TerminalWidget) -> None:
+    """Wait for deferred rendering and its scrollbar message, not just CPU idle."""
+    async with asyncio.timeout(2):
+        # Dispatch queued wheel/key events before checking their pending frame.
+        await pilot.pause()
+        while terminal._frame_timer is not None:
+            await asyncio.sleep(0.005)
+        # The frame callback posts ViewportChanged; let the pane consume it.
+        await pilot.pause()
 
 
 async def test_ctrl_close_bracket_releases_terminal_focus():
@@ -130,13 +143,22 @@ async def test_tab_layout_sets_session_size_before_process_start(size):
         await session.close()
 
 
-async def test_terminal_renderer_preserves_ansi_and_truecolor_styles():
+@pytest.mark.parametrize("frame_delay", [1 / 60, 0.1], ids=["normal", "delayed-timer"])
+async def test_terminal_renderer_preserves_ansi_and_truecolor_styles(monkeypatch, frame_delay):
     app = TerminalTestApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         session, terminal = await open_terminal(pilot, "styles")
+        set_timer = terminal.set_timer
+
+        def delayed_timer(delay, callback=None, **kwargs):
+            if callback == terminal._flush_frame:
+                delay = frame_delay
+            return set_timer(delay, callback, **kwargs)
+
+        monkeypatch.setattr(terminal, "set_timer", delayed_timer)
         feed(session, "\x1b[91;48;2;1;2;3;1mX")
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
 
         segment = terminal.render_line(0)._segments[0]
         style = segment.style
@@ -172,7 +194,7 @@ async def test_open_terminal_updates_when_the_textual_theme_changes():
         await pilot.pause()
         session, terminal = await open_terminal(pilot, "theme-switch")
         feed(session, "X")
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
 
         app.theme = "textual-light"
         await pilot.pause()
@@ -271,7 +293,7 @@ async def test_get_selection_extracts_text_from_the_visible_screen():
         await pilot.pause()
         session, terminal = await open_terminal(pilot, "select")
         feed(session, "hello\r\nworld")
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
 
         result = terminal.get_selection(Selection(Offset(1, 0), Offset(4, 1)))
 
@@ -285,7 +307,7 @@ async def test_get_selection_drops_the_blank_padding_of_terminal_rows():
         await pilot.pause()
         session, terminal = await open_terminal(pilot, "padding")
         feed(session, "hi")
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
 
         text, _ = terminal.get_selection(Selection(Offset(0, 0), Offset(60, 0)))
 
@@ -299,7 +321,7 @@ async def test_render_line_tags_offsets_so_clicks_map_to_characters():
         await pilot.pause()
         session, terminal = await open_terminal(pilot, "offsets")
         feed(session, "abc")
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
 
         offsets = [
             segment.style.meta.get("offset")
@@ -317,7 +339,7 @@ async def test_render_line_highlights_the_selected_span():
         await pilot.pause()
         session, terminal = await open_terminal(pilot, "highlight")
         feed(session, "abcdef")
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
 
         plain = terminal.render_line(0)
         terminal._selection_anchor = (1, 0)
@@ -338,7 +360,7 @@ async def test_wheel_burst_extracts_one_frame_and_keeps_the_final_position(monke
     async with app.run_test(size=(240, 70)) as pilot:
         session, terminal = await open_terminal(pilot, "scroll-burst")
         feed(session, "".join(f"line {index}\r\n" for index in range(1000)))
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         before = terminal.terminal.viewport.offset
         snapshot = Mock(wraps=terminal.terminal.snapshot)
         monkeypatch.setattr(terminal.terminal, "snapshot", snapshot)
@@ -348,7 +370,7 @@ async def test_wheel_burst_extracts_one_frame_and_keeps_the_final_position(monke
 
         assert snapshot.call_count == 0
         assert terminal.terminal.viewport.offset == max(0, before - 300)
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         assert snapshot.call_count == 1
         frame = terminal.terminal.snapshot(force=True)
         assert frame is not None
@@ -369,7 +391,7 @@ async def test_output_burst_batches_frames_without_delaying_terminal_replies(mon
 
         assert snapshot.call_count == 0
         assert terminal._queue is not None and terminal._queue.qsize() == 1
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         assert snapshot.call_count == 1
         assert sent == [b"\x1b[0n"]
         assert terminal.render_line(terminal.terminal.rows - 1).text.startswith("LATEST")
@@ -384,7 +406,7 @@ async def test_scrollbar_tracks_history_and_supports_drag_and_track_clicks():
         bar = pane.history_scrollbar
         original_size = (session._cols, session._rows)
         feed(session, "".join(f"line {index}\r\n" for index in range(300)))
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
 
         viewport = terminal.terminal.viewport
         assert bar.region.width == 1
@@ -395,7 +417,7 @@ async def test_scrollbar_tracks_history_and_supports_drag_and_track_clicks():
         assert (session._cols, session._rows) == original_size
 
         terminal.post_message(scroll_event(terminal, up=True))
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         assert bar.position == viewport.offset - 3
 
         # Drag the handle from the bottom to the top using real mouse events.
@@ -403,12 +425,12 @@ async def test_scrollbar_tracks_history_and_supports_drag_and_track_clicks():
         assert app.mouse_captured is bar
         await pilot.hover(bar, offset=(0, 0))
         await pilot.mouse_up(bar, offset=(0, 0))
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         assert app.mouse_captured is None
         assert bar.position == terminal.terminal.viewport.offset == 0
 
         await pilot.click(bar, offset=(0, bar.size.height - 1))
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         assert bar.position == terminal.terminal.rows - 1
         assert bar.position == terminal.terminal.viewport.offset
 
@@ -421,16 +443,16 @@ async def test_scrollbar_restores_primary_history_after_alternate_screen_and_res
         assert isinstance(pane, TerminalPane)
         bar = pane.history_scrollbar
         feed(session, "line\r\n" * 200)
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         primary_total = bar.window_virtual_size
 
         feed(session, "\x1b[?1049h")
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         assert bar.window_virtual_size == bar.window_size
         assert bar.position == 0
 
         feed(session, "\x1b[?1049l")
-        await pilot.pause()
+        await wait_for_frame(pilot, terminal)
         assert bar.window_virtual_size == primary_total
         assert bar.position == terminal.terminal.viewport.offset
 
