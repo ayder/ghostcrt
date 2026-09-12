@@ -1,0 +1,100 @@
+name: Release assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing published release tag (for example, v0.2.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-assets-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release-assets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: '0.12.10'
+          python-version: '3.12'
+
+      - name: Verify tag matches package version
+        run: |
+          uv run --no-project python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          tag = os.environ["RELEASE_TAG"]
+          if tag != f"v{version}":
+              raise SystemExit(f"Release tag {tag!r} does not match package version {version!r}")
+          print(f"Building ghostcrt {version} from {tag}")
+          PY
+
+      - name: Verify release is published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          is_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')
+          if [ "$is_draft" != "false" ]; then
+            echo "Publish the GitHub Release before uploading its assets."
+            exit 1
+          fi
+
+      - name: Build wheel and source distribution
+        run: uv build --out-dir "$RUNNER_TEMP/release-dist"
+
+      - name: Smoke test the wheel
+        run: |
+          uv venv "$RUNNER_TEMP/release-smoke"
+          uv pip install --python "$RUNNER_TEMP/release-smoke/bin/python" "$RUNNER_TEMP"/release-dist/*.whl
+          cd "$RUNNER_TEMP"
+          expected_version=${RELEASE_TAG#v}
+          actual_version=$("$RUNNER_TEMP/release-smoke/bin/ghostcrt" --version)
+          test "$actual_version" = "ghostcrt $expected_version"
+          "$RUNNER_TEMP/release-smoke/bin/python" - <<'PY'
+          from ghostcrt.ui.widgets.terminal import TerminalWidget
+          from ghostty_textual import Terminal
+
+          terminal = Terminal(80, 24)
+          try:
+              terminal.feed(b"release smoke")
+              assert terminal.snapshot() is not None
+          finally:
+              terminal.close()
+          PY
+
+      - name: Attach missing release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_json=$(gh release view "$RELEASE_TAG" --json assets)
+          for artifact in "$RUNNER_TEMP"/release-dist/*.whl "$RUNNER_TEMP"/release-dist/*.tar.gz; do
+            filename=$(basename "$artifact")
+            if jq -e --arg name "$filename" '.assets | any(.name == $name)' <<< "$release_json" > /dev/null; then
+              echo "Already attached: $filename"
+            else
+              gh release upload "$RELEASE_TAG" "$artifact"
+            fi
+          done
