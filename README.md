@@ -173,3 +173,14 @@ The setup check requires a leading, unconditional Include covering all group
 files. Existing partial or conditional includes do not satisfy this check.
 
 GitHub CI runs tests and builds on Linux and macOS.
+
+## Releases
+
+Publish a GitHub Release using a tag that matches the package version (for
+example, `v0.2.1`). The **Release assets** workflow builds that tag, checks the
+wheel, and attaches the Python wheel and source distribution to the release.
+
+For an existing release or a tag created before this workflow was added, use
+**Actions → Release assets → Run workflow**, select `main`, and enter the release
+tag. Publish the release first. Re-running the workflow uploads missing files
+and leaves existing assets in place. No additional repository secrets are needed.
