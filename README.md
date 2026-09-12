@@ -29,7 +29,7 @@ macOS: `brew install hudochenkov/sshpass/sshpass` (or your preferred tap)
 ## Install
 
 ```bash
-uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.2.0/ghostcrt-0.2.0-py3-none-any.whl
+uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.2.1/ghostcrt-0.2.1-py3-none-any.whl
 ghostcrt
 ```
 
@@ -75,12 +75,22 @@ ghostcrt [--config PATH] [--vault PATH] [--theme NAME] [--debug] [-h] [--version
 | `Ctrl+Q` / `Esc` (unlock) | Quit |
 | `Shift+PageUp/Down` | Scroll local terminal history |
 | Mouse wheel | Scroll local terminal history |
+| Right-hand scrollbar | Drag to scroll history; click the track to page |
 | Mouse drag | Select text to copy |
+
+Click a tab's **×** to close that session. Exited sessions close immediately;
+running or connecting sessions ask for confirmation. `Ctrl+W` and Session → Close
+use the same confirmation. `Ctrl+Q` asks before disconnecting any live sessions.
+
+Multiline paste is supported. When the remote application enables bracketed
+paste, the text is sent as a single paste block. Otherwise, line breaks are sent
+as Enter presses, so pasted shell commands may execute immediately.
 
 Mouse reporting is never forwarded to the remote host. Full-screen programs
 (Vim, htop, tmux) may still request it — `set mouse=a` and friends are simply
 ignored — so the wheel and text selection always belong to the pane. Use
-`Shift+PageUp/Down` or the wheel for scrollback. On macOS, use `Ctrl+O` to
+`Shift+PageUp/Down`, the wheel, or the pane's right-hand scrollbar for scrollback.
+On macOS, use `Ctrl+O` to
 release mouse capture to the host terminal for native selection, and press it
 again to restore ghostcrt mouse handling.
 

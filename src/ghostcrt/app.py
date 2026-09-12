@@ -18,6 +18,7 @@ from ghostcrt.config.paths import (
 from ghostcrt.config.settings import load_settings, save_settings
 from ghostcrt.models import AppSettings
 from ghostcrt.ui.mouse import toggle_mouse_capture
+from ghostcrt.ui.screens.confirm_close import ConfirmCloseScreen
 from ghostcrt.ui.screens.help import HelpScreen
 from ghostcrt.ui.screens.main import MainScreen
 from ghostcrt.ui.screens.unlock import UnlockScreen
@@ -143,7 +144,31 @@ class GhostCRTApp(App[None]):
         self.push_screen(HelpScreen())
 
     async def action_quit(self) -> None:
-        for screen in self.screen_stack:
-            for tabs in screen.query(SessionTabs):
+        session_tabs = [tabs for screen in self.screen_stack for tabs in screen.query(SessionTabs)]
+
+        async def finish_quit(confirmed: bool) -> None:
+            if not confirmed:
+                return
+            for tabs in session_tabs:
                 await tabs.close_all()
-        self.exit()
+            self.exit()
+
+        if any(tabs.has_live_sessions for tabs in session_tabs):
+            if getattr(self, "_quit_prompt_pending", False):
+                return
+            self._quit_prompt_pending = True
+
+            async def on_confirmation(confirmed: bool) -> None:
+                self._quit_prompt_pending = False
+                await finish_quit(confirmed)
+
+            self.push_screen(
+                ConfirmCloseScreen(
+                    "SSH sessions are still running or connecting. "
+                    "Quitting will disconnect them all. Quit ghostcrt?",
+                    confirm_label="Quit ghostcrt",
+                ),
+                on_confirmation,
+            )
+        else:
+            await finish_quit(True)

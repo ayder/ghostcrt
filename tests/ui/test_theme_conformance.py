@@ -27,6 +27,7 @@ from textual.color import Color
 from ghostcrt.config.inventory import HostInventory
 from ghostcrt.models import Host
 from ghostcrt.ui.screens.action_menu import ActionMenuScreen
+from ghostcrt.ui.screens.confirm_close import ConfirmCloseScreen
 from ghostcrt.ui.screens.group_picker import GroupPickerScreen
 from ghostcrt.ui.screens.help import HelpScreen
 from ghostcrt.ui.screens.host_edit import HostEditModal
@@ -70,6 +71,7 @@ def _tmp() -> Path:
 # Each overlay, as (box id, factory). Factories, not instances: a Screen can
 # only be mounted once, and every parametrised case mounts a fresh app.
 OVERLAYS = [
+    ("#confirm-close-box", lambda: ConfirmCloseScreen("Close this running session?")),
     ("#action-menu-box", lambda: ActionMenuScreen("srv1", [("connect", "Connect")])),
     ("#group-picker-box", lambda: GroupPickerScreen(["production"])),
     ("#help-box", HelpScreen),

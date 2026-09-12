@@ -83,6 +83,8 @@ async def test_modal_shutdown_closes_and_reaps_sessions(mode):
             await pilot.pause()
             if mode == "quit":
                 await app.action_quit()
+                await pilot.pause()
+                await pilot.click("#close-confirm")
             elif mode == "exit":
                 app.exit()
             else:
