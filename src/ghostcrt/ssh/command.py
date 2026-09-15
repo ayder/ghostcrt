@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -45,7 +46,10 @@ def build_ssh_command(
     r, w = os.pipe()
     os.set_inheritable(r, True)
     os.set_inheritable(w, False)
-    argv = ["sshpass", "-d", str(r), *ssh_argv]
+    # Verify the host interactively before sshpass can swallow its prompt.
+    # Run the helper by path so this also works from an installed wheel.
+    helper = Path(__file__).with_name("verify_host.py")
+    argv = [sys.executable, str(helper), str(r), *ssh_argv]
     return SshCommand(
         argv=argv,
         pass_fds=(r,),

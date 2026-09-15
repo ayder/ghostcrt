@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 from textual.app import App
@@ -371,7 +372,7 @@ class TestConnectPath:
         calls = []
 
         async def capture(self, argv, **kwargs):
-            calls.append(argv)
+            calls.append((argv, kwargs))
             for name in ("read_fd", "write_fd"):
                 if kwargs.get(name) is not None:
                     os.close(kwargs[name])
@@ -387,8 +388,11 @@ class TestConnectPath:
             await pilot.pause()
 
         assert len(calls) == 1
-        argv = calls[0]
+        argv, kwargs = calls[0]
         if assigned:
-            assert argv[:2] == ["sshpass", "-d"]
+            assert Path(argv[1]).name == "verify_host.py"
+            assert kwargs["password"] == "s3"
+            assert "s3" not in argv
         else:
             assert argv[0] == "ssh"
+            assert kwargs["password"] is None
