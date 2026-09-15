@@ -19,6 +19,9 @@ class ActionMenuScreen(ModalScreen[str | None]):
     ActionMenuScreen {
         align: center middle;
     }
+    ActionMenuScreen.anchored {
+        align: left top;
+    }
     #action-menu-box {
         width: 40;
         height: auto;
@@ -35,11 +38,34 @@ class ActionMenuScreen(ModalScreen[str | None]):
     }
     """
 
-    def __init__(self, title: str, actions: list[tuple[str, str]], **kwargs) -> None:
+    def __init__(
+        self, title: str, actions: list[tuple[str, str]], *, anchor_id: str | None = None, **kwargs
+    ) -> None:
         """actions: list of (id, label)."""
         super().__init__(**kwargs)
         self._title = title
         self._actions = actions
+        self._anchor_id = anchor_id
+        self.set_class(anchor_id is not None, "anchored")
+
+    def on_mount(self) -> None:
+        self.call_after_refresh(self._position_menu)
+
+    def on_resize(self) -> None:
+        self.call_after_refresh(self._position_menu)
+
+    def _position_menu(self) -> None:
+        if self._anchor_id is None or len(self.app.screen_stack) < 2:
+            return
+        anchors = self.app.screen_stack[-2].query(f"#{self._anchor_id}")
+        if not anchors:
+            return
+        anchor = anchors.first()
+        box = self.query_one("#action-menu-box")
+        box.styles.offset = (
+            min(anchor.region.x, max(0, self.size.width - box.outer_size.width)),
+            min(anchor.region.bottom, max(0, self.size.height - box.outer_size.height)),
+        )
 
     def compose(self) -> ComposeResult:
         with Vertical(id="action-menu-box"):

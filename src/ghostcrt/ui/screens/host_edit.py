@@ -248,7 +248,7 @@ class HostEditModal(ModalScreen[HostEditResult | str | None]):
                     id="control-persist",
                     placeholder="10m",
                 )
-                yield Label("Forwarding")
+                yield Label("Forwarding", classes="field-section")
                 yield Static(
                     "One LocalForward, RemoteForward, or DynamicForward directive per line.",
                     id="host-edit-help",
@@ -257,8 +257,8 @@ class HostEditModal(ModalScreen[HostEditResult | str | None]):
                     _format_directives(extra, forwarding=True),
                     id="forwarding",
                 )
-                yield Label("Additional directives")
-                yield Static("One 'Directive value' entry per line.")
+                yield Label("Additional directives", classes="field-section")
+                yield Static("One 'Directive value' entry per line.", classes="field-help")
                 yield TextArea(
                     _format_directives(extra, forwarding=False),
                     id="extra-directives",

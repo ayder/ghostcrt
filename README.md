@@ -5,6 +5,16 @@ password vault. Inspired by tools like `lazyssh`.
 
 Licensed under [GNU GPLv3](LICENSE) (GPL-3.0-only).
 
+## Compact UI experiment
+
+The `experiment/compact-commander-ui` branch tries a Midnight Commander / Ubuntu
+text-dialog layout: one-row menus, buttons and input fields, thin dialog borders,
+drop-down action menus, and an aligned, compact host editor. Run `uv run ghostcrt`
+on this branch to try it. The existing theme picker (`Ctrl+P`) still controls colors.
+
+The layout overrides live in `src/ghostcrt/ui/compact.tcss`. This experiment does
+not change SSH connections, vault storage, or host configuration behavior.
+
 ## Features (v1)
 
 - Inventory from `~/.ssh/config` **and** `~/.config/ghostcrt/includes/`,

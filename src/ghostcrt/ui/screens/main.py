@@ -188,6 +188,7 @@ class MainScreen(Screen):
                     ("delete", "Delete selected"),
                     ("copy", "Copy to group…"),
                 ],
+                anchor_id="menu-hosts",
             ),
             handle,
         )
@@ -210,6 +211,7 @@ class MainScreen(Screen):
                     ("delete-profile", "Delete profile…"),
                     ("assign", "Assign profile to selected host…"),
                 ],
+                anchor_id="menu-vault",
             ),
             handle,
         )
@@ -226,6 +228,7 @@ class MainScreen(Screen):
             ActionMenuScreen(
                 "Session",
                 [("reconnect", "Reconnect"), ("close", "Close")],
+                anchor_id="menu-session",
             ),
             handle,
         )

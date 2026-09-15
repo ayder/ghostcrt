@@ -28,6 +28,7 @@ from ghostcrt.vault.vault import Vault
 
 class GhostCRTApp(App[None]):
     TITLE = "ghostcrt"
+    CSS_PATH = "ui/compact.tcss"
     BINDINGS: ClassVar[list[Binding | tuple[str, str, str]]] = [
         Binding("ctrl+q", "quit", "Quit", show=False, priority=True),
         Binding("ctrl+p", "command_palette", "Palette", show=False, priority=True),
