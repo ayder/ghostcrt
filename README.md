@@ -29,7 +29,7 @@ macOS: `brew install hudochenkov/sshpass/sshpass` (or your preferred tap)
 ## Install
 
 ```bash
-uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.2.1/ghostcrt-0.2.1-py3-none-any.whl
+uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.2.2/ghostcrt-0.2.2-py3-none-any.whl
 ghostcrt
 ```
 
@@ -143,7 +143,9 @@ one from the host editor's dropdown or **Vault → Assign profile to selected ho
 - Master password is never stored. Lost key ⇒ **Reset vault…** and re-enter secrets.
 - Vault file mode `0600`; config dir `0700`.
 - No recovery mechanism by design.
-- Host-key prompts are handled by real `ssh` inside the terminal widget.
+- Host-key prompts are handled by real `ssh` inside the terminal widget. Vault
+  password connections first make a password-free verification connection, so
+  you can accept or reject a new host key before `sshpass` starts the login.
 - Vault files are format 2; ghostcrt 0.1.0 cannot open them, and existing vaults migrate on first change.
 
 ## Limitations (v1)
@@ -159,6 +161,16 @@ one from the host editor's dropdown or **Vault → Assign profile to selected ho
 ```bash
 uv run pytest
 uv run ruff check src tests
+```
+
+Host-key integration tests use an optional local Docker SSH server and isolated
+temporary `known_hosts` files. With `sshpass` installed:
+
+```bash
+docker build -t ghostcrt-ssh-test tests/ssh/fixtures
+docker run -d --rm --name ghostcrt-ssh-test -p 127.0.0.1:22222:22 ghostcrt-ssh-test
+GHOSTCRT_TEST_SSH_PORT=22222 uv run pytest tests/ssh/test_host_key_integration.py
+docker stop ghostcrt-ssh-test
 ```
 
 ## Design decisions
@@ -177,7 +189,7 @@ GitHub CI runs tests and builds on Linux and macOS.
 ## Releases
 
 Publish a GitHub Release using a tag that matches the package version (for
-example, `v0.2.1`). The **Release assets** workflow builds that tag, checks the
+example, `v0.2.2`). The **Release assets** workflow builds that tag, checks the
 wheel, and attaches the Python wheel and source distribution to the release.
 
 For an existing release or a tag created before this workflow was added, use

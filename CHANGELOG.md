@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 — 2026-09-15
+
+- Show first-connection SSH host-key confirmation in the session tab before starting saved-password login, so unknown hosts no longer disconnect immediately.
+- Add real SSH integration coverage for host-key acceptance, rejection, cancellation, changed keys, and reconnecting.
+
 ## 0.2.1 — 2026-09-13
 
 - Batch terminal frame refreshes to prevent pauses during fast scrollback and output bursts.
