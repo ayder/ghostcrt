@@ -5,7 +5,7 @@ from typing import ClassVar
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Input, Label, Static
 
@@ -20,8 +20,9 @@ class ConfirmResetScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm-reset"):
             yield Label("Delete vault and create a new one? This cannot be undone.")
-            yield Button("Cancel", id="cancel", variant="default")
-            yield Button("Reset vault", id="confirm", variant="error")
+            with Horizontal(id="reset-actions"):
+                yield Button("Cancel", id="cancel", variant="default")
+                yield Button("Reset vault", id="confirm", variant="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(event.button.id == "confirm")
@@ -70,9 +71,10 @@ class UnlockScreen(Screen[Vault]):
                 yield Input(placeholder="Confirm master password", password=True, id="confirm")
             yield Static("", id="unlock-error")
             yield Static("", id="unlock-warn")
-            yield Button("Continue", id="submit", variant="primary")
-            if not self._create_mode:
-                yield Button("Reset vault…", id="reset", variant="error")
+            with Horizontal(id="unlock-actions"):
+                yield Button("Continue", id="submit", variant="primary")
+                if not self._create_mode:
+                    yield Button("Reset vault…", id="reset", variant="error")
 
     def on_mount(self) -> None:
         self.query_one("#password", Input).focus()

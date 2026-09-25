@@ -1,0 +1,297 @@
+/* Experimental Commander/newt-style density. Colors remain theme-owned. */
+
+Button {
+    height: 1;
+    min-height: 1;
+    min-width: 8;
+    padding: 0 1;
+    margin: 0 1 0 0;
+    border: none !important;
+}
+
+Button:focus {
+    text-style: bold reverse;
+}
+
+Button:hover {
+    text-style: bold underline;
+}
+
+Input, SelectCurrent {
+    height: 1;
+    min-height: 1;
+    padding: 0 1;
+    border-top: none !important;
+    border-bottom: none !important;
+    border-left: solid $border-blurred;
+    border-right: solid $border-blurred;
+}
+
+Input:focus, Select:focus > SelectCurrent {
+    border-left: solid $border;
+    border-right: solid $border;
+}
+
+Select {
+    height: 1;
+}
+
+SelectOverlay {
+    padding: 0;
+    border: solid $border;
+    max-height: 8;
+}
+
+MenuBar {
+    height: 2;
+    padding: 0;
+    border-bottom: solid $border-blurred;
+}
+
+MenuBar Button {
+    min-width: 0;
+    padding: 0 2;
+    margin: 0;
+}
+
+HostList {
+    width: 26;
+}
+
+HostList #host-filter {
+    margin: 1 0;
+}
+
+MainScreen.compact #main-body {
+    layout: horizontal;
+    layers: base drawer;
+}
+MainScreen.compact HostList {
+    display: none;
+    position: absolute;
+    layer: drawer;
+    width: 28;
+    height: 1fr;
+    border-right: solid $border-blurred;
+    border-bottom: none;
+    background: $surface;
+    &:ansi { background: $ansi-background; }
+}
+MainScreen.compact.hosts-open HostList { display: block; }
+
+SessionTabs Tabs {
+    height: 1;
+}
+
+SessionTabs Underline {
+    display: none;
+}
+
+/* Compact rectangular windows with a single column of interior padding. */
+#action-menu-box, #group-picker-box, #profile-picker-box,
+#profile-edit-box, #unlock-box, #confirm-close-box, #confirm-reset,
+#include-box, #help-box, #host-edit-box {
+    border: solid $primary;
+    padding: 0 1;
+    max-width: 96%;
+    max-height: 95%;
+    overflow-y: auto;
+    scrollbar-size: 1 1;
+}
+
+#group-picker-box, #profile-picker-box {
+    width: 44;
+}
+
+#profile-edit-box, #unlock-box {
+    width: 48;
+}
+
+#confirm-close-box, #confirm-reset {
+    width: 54;
+}
+
+#include-box, #help-box {
+    width: 64;
+}
+
+#host-edit-box {
+    width: 76;
+    height: 90%;
+    max-height: 34;
+    overflow-y: hidden;
+}
+
+#host-edit-fields, .advanced-fields {
+    layout: grid;
+    grid-size: 2;
+    grid-columns: 24 1fr;
+    grid-rows: auto;
+    grid-gutter: 0 1;
+    scrollbar-size: 1 1;
+}
+
+#host-edit-fields Label {
+    text-style: bold;
+}
+
+#host-advanced, #host-edit-fields .field-section, #host-edit-fields .field-help,
+#host-edit-help, #forwarding, #extra-directives {
+    column-span: 2;
+}
+
+#host-edit-fields .field-section {
+    height: 1;
+    min-height: 1;
+}
+
+#host-edit-help, #host-edit-fields .field-help {
+    height: 1;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+}
+
+#identity, #forwarding, #extra-directives {
+    height: 4;
+    min-height: 4;
+    border: solid $border-blurred;
+    padding: 0;
+}
+
+#identity:focus, #forwarding:focus, #extra-directives:focus {
+    border: solid $border;
+}
+
+#host-edit-actions,
+#group-picker-box > Horizontal, #profile-picker-box > Horizontal,
+#profile-edit-box > Horizontal, #include-box > Horizontal,
+#unlock-actions, #reset-actions, #confirm-close-buttons {
+    height: 1;
+    margin: 0;
+    align-horizontal: right;
+}
+
+#group-options, #profile-options {
+    border: none;
+    padding: 0;
+    max-height: 8;
+}
+
+#unlock-error, #unlock-warn {
+    margin: 0;
+    height: auto;
+}
+
+#include-line {
+    padding: 0;
+    margin: 1 0;
+}
+
+#help-intro, #help-close-hint {
+    margin-bottom: 0;
+}
+
+#help-close {
+    margin-top: 0;
+    align-horizontal: right;
+}
+
+/* Drop-down action menus; ordinary dialogs keep their centered placement. */
+ActionMenuScreen.anchored {
+    align: left top;
+}
+
+#action-menu-box {
+    width: 40;
+    height: auto;
+}
+
+#action-menu-box > Label {
+    text-style: bold;
+    padding: 0 1;
+}
+
+#action-menu-box Button {
+    width: 1fr;
+    margin: 0;
+    text-align: left;
+    content-align: left middle;
+}
+
+#action-menu-box #act-cancel {
+    margin-top: 1;
+}
+
+ConfirmResetScreen {
+    align: center middle;
+}
+
+#confirm-reset {
+    height: auto;
+    background: $surface;
+    &:ansi { background: $ansi-background; }
+}
+
+#confirm-reset Label {
+    width: 1fr;
+    height: auto;
+    margin-bottom: 1;
+}
+
+/* Shared terminal chrome and selection states; colors belong to the theme. */
+#menu-help { dock: right; }
+#context-status, #menu-status {
+    height: 1;
+    padding: 0 1;
+    background: $panel;
+    color: $text-muted;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+}
+#action-menu-box { padding: 0; }
+#action-options { height: auto; border: none; padding: 0; }
+OptionList > .option-list--option { padding: 0 1; }
+OptionList:focus > .option-list--option-highlighted {
+    color: $block-cursor-foreground;
+    background: $block-cursor-background;
+    text-style: bold $block-cursor-text-style;
+}
+Tree:focus > .tree--cursor {
+    color: $block-cursor-foreground;
+    background: $block-cursor-background;
+    text-style: bold $block-cursor-text-style;
+}
+Button:focus {
+    color: $block-cursor-foreground;
+    background: $block-cursor-background;
+    text-style: bold $block-cursor-text-style;
+}
+#host-advanced {
+    height: auto;
+    padding: 0;
+    border: none;
+    background: $surface;
+    &:ansi { background: $ansi-background; }
+}
+#host-advanced Contents { padding: 0; }
+.advanced-fields { height: auto; }
+#host-edit-fields .field-section { margin-top: 0; color: $text-muted; }
+SessionTab.-active { text-style: bold reverse; }
+
+SessionTabs Tab {
+    height: 1;
+    padding: 0 1;
+    margin: 0;
+}
+ActionMenuScreen { background: transparent; }
+
+#menu-status { dock: bottom; }
+
+#unlock-title { margin-bottom: 1; }
+
+/* Disabled actions remain subdued even when hovered or programmatically highlighted. */
+#action-options > .option-list--option-disabled {
+    color: $text-disabled;
+    background: transparent;
+    text-style: dim;
+}

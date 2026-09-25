@@ -9,6 +9,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
+from ghostcrt.ui.widgets.choice_list import ChoiceList
+
 NO_CHOICE = "Choose a group or type a new name."
 LABEL_CHOOSE = "Choose"
 LABEL_CREATE = "Create"
@@ -44,7 +46,7 @@ class GroupPickerScreen(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="group-picker-box"):
             yield Label("Choose a group")
-            options = OptionList(id="group-options")
+            options = ChoiceList(id="group-options")
             for name in self.groups:
                 options.add_option(Option(name, id=name))
             yield options

@@ -96,7 +96,7 @@ async def wait_for_frame(pilot, terminal: TerminalWidget) -> None:
         await pilot.pause()
 
 
-async def test_ctrl_close_bracket_releases_terminal_focus():
+async def test_ctrl_t_releases_terminal_focus():
     app = TerminalTestApp()
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -109,7 +109,7 @@ async def test_ctrl_close_bracket_releases_terminal_focus():
         await pilot.pause()
         assert app.focused is terminal
 
-        await pilot.press("ctrl+right_square_bracket")
+        await pilot.press("ctrl+t")
 
         assert app.focused is app.screen.query_one(HostList).query_one("#host-tree")
         await session.close()

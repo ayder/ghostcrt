@@ -3,10 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from rich.segment import Segment
+from rich.style import Style
+from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.message import Message
+from textual.strip import Strip
 from textual.widgets import Input, Tree
+from textual.widgets.tree import TreeNode
 
 from ghostcrt.models import Host, HostGroup
 from ghostcrt.ui.widgets.fuzzy import filter_hosts
@@ -23,6 +29,26 @@ class HostNode:
     host: Host | None
     group: str
     connectable: bool
+
+
+class HostTree(Tree[HostNode]):
+    """A full-row cursor with a marker that survives palette changes."""
+
+    def render_label(self, node: TreeNode[HostNode], base_style: Style, style: Style) -> Text:
+        label = super().render_label(node, base_style, style)
+        if node.data and node.data.connectable:
+            label = Text("> " if node == self.cursor_node else "  ", style=style) + label
+        return label
+
+    def render_line(self, y: int) -> Strip:
+        strip = super().render_line(y)
+        if y + self.scroll_offset.y == self.cursor_line:
+            cursor = self.get_component_rich_style("tree--cursor")
+            strip = Strip(
+                Segment(segment.text, (segment.style or Style()) + cursor, segment.control)
+                for segment in strip
+            )
+        return strip
 
 
 class HostList(Vertical):
@@ -61,7 +87,7 @@ class HostList(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="Filter hosts…", id="host-filter")
-        tree: Tree[HostNode] = Tree("hosts", id="host-tree")
+        tree = HostTree("hosts", id="host-tree")
         tree.show_root = False
         yield tree
 
@@ -85,9 +111,12 @@ class HostList(Vertical):
             tree = self.query_one("#host-tree", Tree)
         except Exception:
             return
+        selected_key = (self._selected_group, self._selected.alias) if self._selected else None
+        collapsed = {n.data.group for n in tree.root.children if n.data and not n.is_expanded}
         self._selected = None
         self._selected_group = None
         tree.clear()
+        restore = None
         query = self._query()
         for group in self._groups:
             matches = filter_hosts(group.hosts, query)
@@ -97,13 +126,13 @@ class HostList(Vertical):
                 continue
             suffix = ""
             if not group.writable:
-                suffix = " 🔒"
+                suffix = " [RO]"
             if group.error:
-                suffix = " ⚠"
+                suffix = " [!]"
             node = tree.root.add(
                 f"{group.name}{suffix}",
                 data=HostNode(host=None, group=group.name, connectable=False),
-                expand=True,
+                expand=bool(query) or group.name not in collapsed,
             )
             for host in matches:
                 label = host.alias
@@ -112,21 +141,37 @@ class HostList(Vertical):
                     # The sidebar is 28 columns; a prose annotation truncates
                     # to nothing useful, so mark it compactly instead.
                     label = f"{host.alias}  ⊘ {shadow}"
-                node.add_leaf(
+                leaf = node.add_leaf(
                     label,
                     data=HostNode(host=host, group=group.name, connectable=True),
                 )
+                if selected_key == (group.name, host.alias):
+                    restore = leaf
             for pattern in patterns:
                 node.add_leaf(
                     pattern.alias,
                     data=HostNode(host=pattern, group=group.name, connectable=False),
                 )
 
+        if restore is not None:
+            tree.move_cursor(restore)
+            self.call_after_refresh(lambda: tree.move_cursor(restore))
+            self._selected = restore.data.host
+            self._selected_group = restore.data.group
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key == "down" and self.query_one("#host-filter", Input).has_focus:
+            event.stop()
+            event.prevent_default()
+            self.focus_list()
+
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "host-filter":
             self._rebuild()
 
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        if event.node is not self.query_one(Tree).cursor_node:
+            return
         data = event.node.data
         if data is not None and data.connectable and data.host is not None:
             self._selected = data.host

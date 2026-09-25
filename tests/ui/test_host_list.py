@@ -113,7 +113,7 @@ async def test_readonly_group_is_marked(tmp_path):
         tree = host_list.query_one(Tree)
         node = next(n for n in tree.root.children if str(n.label).startswith(READONLY_GROUP))
 
-        assert "🔒" in str(node.label)
+        assert "[RO]" in str(node.label)
 
 
 async def test_shadowed_host_is_annotated(tmp_path):

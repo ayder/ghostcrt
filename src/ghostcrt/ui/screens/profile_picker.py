@@ -10,6 +10,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Label, OptionList
 from textual.widgets.option_list import Option
 
+from ghostcrt.ui.widgets.choice_list import ChoiceList
+
 NONE_OPTION_ID = "none"
 PROFILE_OPTION_PREFIX = "profile:"
 
@@ -59,7 +61,7 @@ class ProfilePickerScreen(ModalScreen[ProfilePick | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="profile-picker-box"):
             yield Label(self._title)
-            options = OptionList(id="profile-options")
+            options = ChoiceList(id="profile-options")
             if self.allow_none:
                 options.add_option(Option("(none)", id=NONE_OPTION_ID))
             for name in self.profiles:

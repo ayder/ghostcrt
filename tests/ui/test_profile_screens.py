@@ -204,7 +204,7 @@ class TestProfilePicker:
                 str(options.get_option_at_index(i).prompt) for i in range(options.option_count)
             ]
             assert ids == ["none", "profile:a", "profile:b"]
-            assert prompts == ["(none)", "a", "b"]
+            assert [prompt.strip() for prompt in prompts] == ["(none)", "a", "b"]
 
             options.highlighted = 0
             options.action_select()

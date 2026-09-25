@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-09-25
+
+- Introduce a compact terminal layout with a separated menu bar, one-row controls and session tabs, contextual footer hints, and a host drawer on narrow terminals. Colors follow the selected Textual theme.
+- Add keyboard-navigable dropdown menus, synchronized menu highlights, disabled action styling, and consistent selection markers. Preserve host selection while filtering.
+- Organize host editing into connection, authentication, and collapsible advanced settings; improve vault and filter spacing.
+- Add Clone selected with copied settings and vault profile, and confirm host deletion from both the menu and editor.
+- Change the terminal-release shortcut from Ctrl+] to Ctrl+T and show Ctrl+H Help in the footer.
+
 ## 0.2.2 — 2026-09-15
 
 - Show first-connection SSH host-key confirmation in the session tab before starting saved-password login, so unknown hosts no longer disconnect immediately.
