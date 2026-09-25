@@ -40,7 +40,7 @@ macOS: `brew install hudochenkov/sshpass/sshpass` (or your preferred tap)
 ## Install
 
 ```bash
-uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.2.2/ghostcrt-0.2.2-py3-none-any.whl
+uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.3.0/ghostcrt-0.3.0-py3-none-any.whl
 ghostcrt
 ```
 
@@ -213,7 +213,7 @@ GitHub CI runs tests and builds on Linux and macOS.
 ## Releases
 
 Publish a GitHub Release using a tag that matches the package version (for
-example, `v0.2.2`). The **Release assets** workflow builds that tag, checks the
+example, `v0.3.0`). The **Release assets** workflow builds that tag, checks the
 wheel, and attaches the Python wheel and source distribution to the release.
 
 For an existing release or a tag created before this workflow was added, use
