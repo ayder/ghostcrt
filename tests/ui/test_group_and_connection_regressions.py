@@ -75,6 +75,9 @@ async def test_actions_target_selected_writable_duplicate(tmp_path, monkeypatch,
         screen = app.screen
         if action == "delete":
             screen._host_delete()
+            await pilot.pause()
+            assert SshConfigStore(tmp_path / "includes/bbb.conf").get("duplicate") is not None
+            await pilot.click("#close-confirm")
         elif action == "edit":
             screen._host_edit()
             await pilot.pause()

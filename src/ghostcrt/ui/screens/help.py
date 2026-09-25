@@ -52,10 +52,13 @@ class HelpScreen(ModalScreen[None]):
 
     SHORTCUTS: ClassVar[list[tuple[str, str]]] = [
         ("ctrl+n", "Focus the Hosts list."),
-        ("/", "Search and filter hosts."),
+        ("/", "Search and filter hosts (outside the terminal)."),
+        ("f10", "Focus the menu bar (outside the terminal)."),
+        ("escape", "Return from Hosts to the active terminal."),
+        ("↑↓ / ←→", "Choose an action / switch open menus."),
         ("enter", "Connect to the selected host."),
         ("ctrl+w", "Close the active SSH session."),
-        ("ctrl+]", "Release terminal focus and return to Hosts."),
+        ("ctrl+t", "Release terminal focus and return to Hosts."),
         ("ctrl+o", "Toggle mouse capture for native terminal selection."),
         ("ctrl+p", "Open the command palette and theme picker."),
         ("ctrl+h", "Show or close this help window."),
@@ -66,7 +69,7 @@ class HelpScreen(ModalScreen[None]):
         with Vertical(id="help-box"):
             yield Label("Keyboard help")
             yield Static(
-                "Application shortcuts work even while an SSH terminal has focus.",
+                "Ctrl shortcuts work in the terminal. Release focus with Ctrl+T for UI navigation.",
                 id="help-intro",
             )
             with Grid(id="help-shortcuts"):

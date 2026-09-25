@@ -4,11 +4,12 @@ import re
 from dataclasses import dataclass
 from typing import ClassVar
 
+from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Select, Static, TextArea
+from textual.widgets import Button, Collapsible, Input, Label, Select, Static, TextArea
 
 from ghostcrt.models import Host, SshOptionValue
 
@@ -188,12 +189,16 @@ class HostEditModal(ModalScreen[HostEditResult | str | None]):
         with Vertical(id="host-edit-box"):
             yield Label("Add host" if self.is_new else "Edit host")
             with VerticalScroll(id="host-edit-fields"):
-                yield Label("Aliases (space-separated)")
+                yield Label("Connection", classes="field-section")
+                yield Label("Aliases")
                 yield Input(value=aliases, id="aliases", placeholder="web web1")
                 yield Label("HostName")
                 yield Input(value=(h.hostname or "") if h else "", id="hostname")
                 yield Label("User")
                 yield Input(value=(h.user or "") if h else "", id="user")
+                yield Label("Port")
+                yield Input(value=str(h.port) if h and h.port is not None else "", id="port")
+                yield Label("Authentication", classes="field-section")
                 yield Label("Vault password profile")
                 yield Select(
                     [(name, name) for name in self.profiles],
@@ -202,73 +207,75 @@ class HostEditModal(ModalScreen[HostEditResult | str | None]):
                     prompt="(none)",
                     value=self.profile if self.profile in self.profiles else Select.NULL,
                 )
-                yield Label("Port")
-                yield Input(value=str(h.port) if h and h.port is not None else "", id="port")
-                yield Label("Identity files (one per line)")
+                yield Label("Identity files")
                 yield TextArea(
                     "\n".join(_values(h.identity_file)) if h and h.identity_file else "",
                     id="identity",
                 )
-                yield Label("ProxyCommand")
-                yield Input(
-                    value=_single_extra(extra, "proxycommand"),
-                    id="proxy-command",
-                    placeholder=(
-                        "gcloud compute start-iap-tunnel %h %p --listen-on-stdin "
-                        "--project=PROJECT --zone=ZONE"
-                    ),
-                )
-                yield Label("IdentitiesOnly")
-                yield Input(
-                    value=_single_extra(extra, "identitiesonly"),
-                    id="identities-only",
-                    placeholder="yes",
-                )
-                yield Label("UserKnownHostsFile")
-                yield Input(
-                    value=_single_extra(extra, "userknownhostsfile"),
-                    id="known-hosts-file",
-                    placeholder="~/.ssh/google_compute_known_hosts",
-                )
-                yield Label("ControlMaster")
-                yield Input(
-                    value=_single_extra(extra, "controlmaster"),
-                    id="control-master",
-                    placeholder="auto",
-                )
-                yield Label("ControlPath")
-                yield Input(
-                    value=_single_extra(extra, "controlpath"),
-                    id="control-path",
-                    placeholder="~/.ssh/sockets/%r@%h:%p",
-                )
-                yield Label("ControlPersist")
-                yield Input(
-                    value=_single_extra(extra, "controlpersist"),
-                    id="control-persist",
-                    placeholder="10m",
-                )
-                yield Label("Forwarding", classes="field-section")
-                yield Static(
-                    "One LocalForward, RemoteForward, or DynamicForward directive per line.",
-                    id="host-edit-help",
-                )
-                yield TextArea(
-                    _format_directives(extra, forwarding=True),
-                    id="forwarding",
-                )
-                yield Label("Additional directives", classes="field-section")
-                yield Static("One 'Directive value' entry per line.", classes="field-help")
-                yield TextArea(
-                    _format_directives(extra, forwarding=False),
-                    id="extra-directives",
-                )
+                with (
+                    Collapsible(title="Advanced", collapsed=True, id="host-advanced"),
+                    Vertical(classes="advanced-fields"),
+                ):
+                    yield Label("ProxyCommand")
+                    yield Input(
+                        value=_single_extra(extra, "proxycommand"),
+                        id="proxy-command",
+                        placeholder=(
+                            "gcloud compute start-iap-tunnel %h %p --listen-on-stdin "
+                            "--project=PROJECT --zone=ZONE"
+                        ),
+                    )
+                    yield Label("IdentitiesOnly")
+                    yield Input(
+                        value=_single_extra(extra, "identitiesonly"),
+                        id="identities-only",
+                        placeholder="yes",
+                    )
+                    yield Label("UserKnownHostsFile")
+                    yield Input(
+                        value=_single_extra(extra, "userknownhostsfile"),
+                        id="known-hosts-file",
+                        placeholder="~/.ssh/google_compute_known_hosts",
+                    )
+                    yield Label("ControlMaster")
+                    yield Input(
+                        value=_single_extra(extra, "controlmaster"),
+                        id="control-master",
+                        placeholder="auto",
+                    )
+                    yield Label("ControlPath")
+                    yield Input(
+                        value=_single_extra(extra, "controlpath"),
+                        id="control-path",
+                        placeholder="~/.ssh/sockets/%r@%h:%p",
+                    )
+                    yield Label("ControlPersist")
+                    yield Input(
+                        value=_single_extra(extra, "controlpersist"),
+                        id="control-persist",
+                        placeholder="10m",
+                    )
+                    yield Label("Forwarding", classes="field-section")
+                    yield Static(
+                        "One LocalForward, RemoteForward, or DynamicForward directive per line.",
+                        id="host-edit-help",
+                    )
+                    yield TextArea(
+                        _format_directives(extra, forwarding=True),
+                        id="forwarding",
+                    )
+                    yield Label("Additional directives", classes="field-section")
+                    yield Static("One 'Directive value' entry per line.", classes="field-help")
+                    yield TextArea(
+                        _format_directives(extra, forwarding=False),
+                        id="extra-directives",
+                    )
             yield Static("", id="host-edit-error")
             with Horizontal(id="host-edit-actions"):
-                yield Button("Save", id="save", variant="primary")
+                yield Button(Text("[ Save ]"), id="save", variant="primary")
                 if not self.is_new:
                     yield Button("Delete", id="delete", variant="error")
-                yield Button("Cancel", id="cancel")
+                yield Button(Text("[ Cancel ]"), id="cancel")
 
     def _error(self, msg: str) -> None:
         self.query_one("#host-edit-error", Static).update(msg)

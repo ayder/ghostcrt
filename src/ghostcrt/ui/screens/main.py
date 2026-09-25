@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+from copy import deepcopy
 from pathlib import Path
 from typing import ClassVar
 
@@ -10,7 +11,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import Footer, Header
+from textual.widgets import Input, Static
 
 from ghostcrt.config.include_bootstrap import include_is_configured
 from ghostcrt.config.inventory import READONLY_GROUP, HostInventory
@@ -19,6 +20,7 @@ from ghostcrt.models import Host
 from ghostcrt.ssh.command import build_ssh_command
 from ghostcrt.ssh.session import SshSession
 from ghostcrt.ui.screens.action_menu import ActionMenuScreen
+from ghostcrt.ui.screens.confirm_close import ConfirmCloseScreen
 from ghostcrt.ui.screens.group_picker import GroupPickerScreen
 from ghostcrt.ui.screens.host_edit import HostEditModal, HostEditResult
 from ghostcrt.ui.screens.include_setup import IncludeSetupModal
@@ -39,14 +41,16 @@ NO_GROUP_CHOSEN = "Host not saved: no group chosen."
 
 class MainScreen(Screen):
     BINDINGS: ClassVar[list[Binding | tuple[str, str, str]]] = [
+        Binding("f10", "focus_menu", "Menu", show=False),
+        Binding("escape", "focus_terminal", "Terminal", show=False),
         Binding("slash", "focus_search", "Search", show=False),
         Binding("ctrl+n", "focus_hosts", "Hosts", show=False),
         Binding("ctrl+w", "close_session", "Close session", show=False),
         Binding(
-            "ctrl+right_square_bracket",
+            "ctrl+t",
             "focus_hosts",
             "Release terminal",
-            key_display="Ctrl+]",
+            key_display="Ctrl+T",
             show=False,
             priority=True,
         ),
@@ -76,12 +80,11 @@ class MainScreen(Screen):
         self.ssh_config = ssh_config
 
     def compose(self) -> ComposeResult:
-        yield Header()
         yield MenuBar()
         with Horizontal(id="main-body"):
             yield HostList(id="host-list")
             yield SessionTabs(id="session-tabs")
-        yield Footer()
+        yield Static("ghostcrt · Ctrl+H Help", id="context-status", markup=False)
 
     def on_mount(self) -> None:
         self.refresh_hosts()
@@ -112,10 +115,35 @@ class MainScreen(Screen):
             self.notify(str(exc), severity="error")
         self.query_one(HostList).set_groups(self.inventory.groups())
 
+    def action_focus_menu(self) -> None:
+        self.query_one("#menu-hosts").focus()
+
+    def action_focus_terminal(self) -> None:
+        terminal = self.query_one(SessionTabs).active_terminal
+        if terminal is not None:
+            self.remove_class("hosts-open")
+            terminal.focus()
+
+    def on_descendant_focus(self, event: events.DescendantFocus) -> None:
+        if event.widget is not self.app.focused:
+            return
+        if isinstance(event.widget, TerminalWidget):
+            self.remove_class("hosts-open")
+            hint = "TERMINAL  Ctrl+T Hosts · Ctrl+O Mouse"
+        elif isinstance(event.widget, Input):
+            hint = "FILTER  Down Hosts · Esc Terminal · F10 Menu"
+        elif event.widget.id == "host-tree":
+            hint = "HOSTS  ↑↓ Navigate · Enter Connect · / Filter · F10 Menu · Esc Terminal"
+        else:
+            hint = "MENU  Enter Open · Tab Next · Esc Terminal"
+        self.query_one("#context-status", Static).update(f"ghostcrt · Ctrl+H Help · {hint}")
+
     def action_focus_search(self) -> None:
+        self.add_class("hosts-open")
         self.query_one(HostList).focus_filter()
 
     def action_focus_hosts(self) -> None:
+        self.add_class("hosts-open")
         self.query_one(HostList).focus_list()
 
     @on(TerminalWidget.ReleaseFocus)
@@ -174,6 +202,8 @@ class MainScreen(Screen):
                 self._host_add()
             elif action == "edit":
                 self._host_edit()
+            elif action == "clone":
+                self._host_clone()
             elif action == "delete":
                 self._host_delete()
             elif action == "copy":
@@ -185,10 +215,16 @@ class MainScreen(Screen):
                 [
                     ("add", "Add host"),
                     ("edit", "Edit selected"),
-                    ("delete", "Delete selected"),
+                    ("clone", "Clone selected…"),
                     ("copy", "Copy to group…"),
+                    ("delete", "Delete selected…"),
                 ],
                 anchor_id="menu-hosts",
+                disabled=(
+                    {"edit", "delete", "copy", "clone"} if self._selected_host() is None
+                    else {"edit", "delete"} if self._is_read_only(self._selected_group())
+                    else set()
+                ),
             ),
             handle,
         )
@@ -212,6 +248,7 @@ class MainScreen(Screen):
                     ("assign", "Assign profile to selected host…"),
                 ],
                 anchor_id="menu-vault",
+                disabled={"assign"} if self._selected_host() is None else set(),
             ),
             handle,
         )
@@ -229,6 +266,8 @@ class MainScreen(Screen):
                 "Session",
                 [("reconnect", "Reconnect"), ("close", "Close")],
                 anchor_id="menu-session",
+                disabled={"reconnect", "close"}
+                if self.query_one(SessionTabs).active_session is None else set(),
             ),
             handle,
         )
@@ -265,7 +304,7 @@ class MainScreen(Screen):
 
         self.app.push_screen(GroupPickerScreen(self._writable_groups()), handle)
 
-    def _host_add(self) -> None:
+    def _host_add(self, template: Host | None = None, profile: str | None = None) -> None:
         def handle(result: HostEditResult | str | None) -> None:
             if not isinstance(result, HostEditResult):
                 return
@@ -287,8 +326,32 @@ class MainScreen(Screen):
             self._pick_group(write)
 
         self.app.push_screen(
-            HostEditModal(is_new=True, profiles=self.vault.profiles()), handle
+            HostEditModal(
+                template, is_new=True, profiles=self.vault.profiles(), profile=profile
+            ), handle
         )
+
+    def _host_clone(self) -> None:
+        host = self._selected_host()
+        if host is None:
+            self.notify("Select a host first.", severity="warning")
+            return
+        clone = deepcopy(host)
+        aliases = {
+            alias
+            for group in self.inventory.groups()
+            for entry in group.hosts
+            for alias in entry.aliases
+        }
+        base = f"{host.alias}-copy"
+        alias = base
+        suffix = 2
+        while alias in aliases:
+            alias = f"{base}-{suffix}"
+            suffix += 1
+        clone.alias = alias
+        clone.aliases = [alias]
+        self._host_add(clone, self.vault.profile_for(host.alias))
 
     def _host_copy_to_group(self) -> None:
         host = self._selected_host()
@@ -333,10 +396,11 @@ class MainScreen(Screen):
         def handle(result: HostEditResult | str | None) -> None:
             if result is None:
                 return
+            if result == "delete":
+                self._confirm_host_delete(host, group)
+                return
             try:
-                if result == "delete":
-                    self.inventory.delete(group, selected)
-                elif isinstance(result, HostEditResult):
+                if isinstance(result, HostEditResult):
                     self.inventory.update(group, selected, result.host)
                 self.refresh_hosts()
             except SshConfigError as exc:
@@ -383,12 +447,32 @@ class MainScreen(Screen):
                 severity="warning",
             )
             return
-        try:
-            self.inventory.delete(group, host.alias)
-            self.refresh_hosts()
-            self.notify(f"Deleted host block for {host.alias}")
-        except SshConfigError as exc:
-            self.notify(str(exc), severity="error")
+        self._confirm_host_delete(host, group)
+
+    def _confirm_host_delete(self, host: Host, group: str | None) -> None:
+        if group is None or self._is_read_only(group):
+            return
+        alias = host.alias
+        details = (
+            f"Are you sure you want to delete host {alias}?\n\n"
+            f"Group: {group}\n"
+            f"Aliases: {' '.join(host.aliases)}\n"
+            f"HostName: {host.hostname or '(from SSH config)'}\n"
+            f"User: {host.user or '(default)'}   Port: {host.port or 22}\n\n"
+            "This removes the entire host configuration block."
+        )
+
+        def confirmed(delete: bool) -> None:
+            if not delete:
+                return
+            try:
+                self.inventory.delete(group, alias)
+                self.refresh_hosts()
+                self.notify(f"Deleted host block for {alias}")
+            except SshConfigError as exc:
+                self.notify(str(exc), severity="error")
+
+        self.app.push_screen(ConfirmCloseScreen(details, confirm_label="OK"), confirmed)
 
     def _profile_create(self) -> None:
         def handle(result: tuple[str, str] | None) -> None:

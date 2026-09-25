@@ -33,7 +33,7 @@ _APP_KEYS = frozenset(
         "ctrl+p",
         "ctrl+q",
         "ctrl+w",
-        "ctrl+right_square_bracket",
+        "ctrl+t",
     }
 )
 
@@ -101,10 +101,10 @@ class TerminalWidget(TerminalView):
 
     BINDINGS: ClassVar[list[Binding]] = [
         Binding(
-            "ctrl+right_square_bracket",
+            "ctrl+t",
             "release_focus",
             "Release terminal",
-            key_display="Ctrl+]",
+            key_display="Ctrl+T",
             priority=True,
         )
     ]

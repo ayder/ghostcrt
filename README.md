@@ -5,15 +5,16 @@ password vault. Inspired by tools like `lazyssh`.
 
 Licensed under [GNU GPLv3](LICENSE) (GPL-3.0-only).
 
-## Compact UI experiment
+## Compact terminal UI
 
-The `experiment/compact-commander-ui` branch tries a Midnight Commander / Ubuntu
-text-dialog layout: one-row menus, buttons and input fields, thin dialog borders,
-drop-down action menus, and an aligned, compact host editor. Run `uv run ghostcrt`
-on this branch to try it. The existing theme picker (`Ctrl+P`) still controls colors.
+One-row controls and session tabs, arrow-key dropdown menus, clear selection
+markers, and a contextual footer keep the interface compact. Narrow terminals
+use a host drawer that closes when the SSH terminal gains focus. The host editor
+keeps advanced settings collapsed until needed. Colors follow the existing
+Textual theme picker (`Ctrl+P`).
 
-The layout overrides live in `src/ghostcrt/ui/compact.tcss`. This experiment does
-not change SSH connections, vault storage, or host configuration behavior.
+Use `Ctrl+T` to return from a session to Hosts, `F10` to focus the menu bar,
+and `Ctrl+H` for help. Run `uv run ghostcrt` to try the interface locally.
 
 ## Features (v1)
 
@@ -78,9 +79,12 @@ ghostcrt [--config PATH] [--vault PATH] [--theme NAME] [--debug] [-h] [--version
 | `Ctrl+P` | Command palette (themes, etc.) |
 | `Ctrl+H` | Show keyboard help |
 | `Ctrl+O` | Toggle mouse capture / native terminal selection |
-| `Ctrl+]` | Release terminal focus and return to the host list |
+| `Ctrl+T` | Release terminal focus and return to the host list |
 | `Ctrl+N` | Focus host list |
-| `/` | Focus host filter |
+| `/` | Focus host filter (outside the terminal) |
+| `F10` | Focus menu bar (outside the terminal) |
+| `Esc` (Hosts) | Return to active terminal and close the narrow host drawer |
+| `↑↓` / `←→` (menus) | Choose action / switch menu |
 | `Ctrl+W` | Close active session |
 | `Ctrl+Q` / `Esc` (unlock) | Quit |
 | `Shift+PageUp/Down` | Scroll local terminal history |
@@ -127,9 +131,19 @@ first value it finds for each keyword, so an `Include` below a `Host *` block
 would be shadowed.
 
 Hosts defined in `~/.ssh/config` stay visible and connectable but are
-read-only, marked `🔒`. Use **Hosts → Copy to group…** to adopt one into a
+read-only, marked `[RO]`. Use **Hosts → Copy to group…** to adopt one into a
 group, where it becomes editable. Because the include is read first, the copy
 wins; the original is marked `⊘ <group>` to show it has been shadowed.
+
+### Clone and delete hosts
+
+**Hosts → Clone selected…** opens an Add host form with the selected host's
+settings and vault profile copied. It suggests an unused `-copy` alias; edit it
+as needed, save, and choose the destination group. Read-only hosts can also be cloned.
+
+Deleting through **Hosts → Delete selected…** or the editor's **Delete** button
+shows the host details and asks for **OK / Cancel** confirmation before removing
+the whole host block, including its aliases.
 
 ### Advanced host settings
 

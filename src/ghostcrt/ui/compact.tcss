@@ -43,8 +43,9 @@ SelectOverlay {
 }
 
 MenuBar {
-    height: 1;
+    height: 2;
     padding: 0;
+    border-bottom: solid $border-blurred;
 }
 
 MenuBar Button {
@@ -58,12 +59,25 @@ HostList {
 }
 
 HostList #host-filter {
-    margin: 0;
+    margin: 1 0;
 }
 
-MainScreen.compact HostList {
-    height: 6;
+MainScreen.compact #main-body {
+    layout: horizontal;
+    layers: base drawer;
 }
+MainScreen.compact HostList {
+    display: none;
+    position: absolute;
+    layer: drawer;
+    width: 28;
+    height: 1fr;
+    border-right: solid $border-blurred;
+    border-bottom: none;
+    background: $surface;
+    &:ansi { background: $ansi-background; }
+}
+MainScreen.compact.hosts-open HostList { display: block; }
 
 SessionTabs Tabs {
     height: 1;
@@ -108,7 +122,7 @@ SessionTabs Underline {
     overflow-y: hidden;
 }
 
-#host-edit-fields {
+#host-edit-fields, .advanced-fields {
     layout: grid;
     grid-size: 2;
     grid-columns: 24 1fr;
@@ -121,7 +135,7 @@ SessionTabs Underline {
     text-style: bold;
 }
 
-#host-edit-fields .field-section, #host-edit-fields .field-help,
+#host-advanced, #host-edit-fields .field-section, #host-edit-fields .field-help,
 #host-edit-help, #forwarding, #extra-directives {
     column-span: 2;
 }
@@ -222,4 +236,62 @@ ConfirmResetScreen {
     width: 1fr;
     height: auto;
     margin-bottom: 1;
+}
+
+/* Shared terminal chrome and selection states; colors belong to the theme. */
+#menu-help { dock: right; }
+#context-status, #menu-status {
+    height: 1;
+    padding: 0 1;
+    background: $panel;
+    color: $text-muted;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+}
+#action-menu-box { padding: 0; }
+#action-options { height: auto; border: none; padding: 0; }
+OptionList > .option-list--option { padding: 0 1; }
+OptionList:focus > .option-list--option-highlighted {
+    color: $block-cursor-foreground;
+    background: $block-cursor-background;
+    text-style: bold $block-cursor-text-style;
+}
+Tree:focus > .tree--cursor {
+    color: $block-cursor-foreground;
+    background: $block-cursor-background;
+    text-style: bold $block-cursor-text-style;
+}
+Button:focus {
+    color: $block-cursor-foreground;
+    background: $block-cursor-background;
+    text-style: bold $block-cursor-text-style;
+}
+#host-advanced {
+    height: auto;
+    padding: 0;
+    border: none;
+    background: $surface;
+    &:ansi { background: $ansi-background; }
+}
+#host-advanced Contents { padding: 0; }
+.advanced-fields { height: auto; }
+#host-edit-fields .field-section { margin-top: 0; color: $text-muted; }
+SessionTab.-active { text-style: bold reverse; }
+
+SessionTabs Tab {
+    height: 1;
+    padding: 0 1;
+    margin: 0;
+}
+ActionMenuScreen { background: transparent; }
+
+#menu-status { dock: bottom; }
+
+#unlock-title { margin-bottom: 1; }
+
+/* Disabled actions remain subdued even when hovered or programmatically highlighted. */
+#action-options > .option-list--option-disabled {
+    color: $text-disabled;
+    background: transparent;
+    text-style: dim;
 }

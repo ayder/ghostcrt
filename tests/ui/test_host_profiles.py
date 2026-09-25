@@ -396,3 +396,90 @@ class TestConnectPath:
         else:
             assert argv[0] == "ssh"
             assert kwargs["password"] is None
+
+
+@pytest.mark.parametrize("from_editor", [False, True])
+async def test_delete_requires_confirmation_from_menu_and_editor(tmp_path, from_editor):
+    from ghostcrt.ui.screens.confirm_close import ConfirmCloseScreen
+
+    app, inventory, _vault = make_vault_app(tmp_path, block="Host srv1 srv2\n HostName server.example\n")
+    path = tmp_path / "includes" / "bbb.conf"
+    original = path.read_text()
+    async with app.run_test(size=(100, 30)) as pilot:
+        screen = app.screen
+        await highlight_alias(pilot, "bbb", "srv2")
+
+        async def request_delete():
+            if from_editor:
+                screen._host_edit()
+                await pilot.pause()
+                app.screen.query_one("#delete").press()
+            else:
+                screen._host_delete()
+            await pilot.pause()
+
+        await request_delete()
+        assert isinstance(app.screen, ConfirmCloseScreen)
+        assert "srv2" in app.screen.warning
+        assert "srv1 srv2" in app.screen.warning
+        assert "server.example" in app.screen.warning
+        assert "bbb" in app.screen.warning
+        assert app.focused.id == "close-cancel"
+        assert path.read_text() == original
+        await pilot.press("escape")
+        assert path.read_text() == original
+        await request_delete()
+        await pilot.click("#close-confirm")
+        await pilot.pause()
+        assert "Host srv1" not in path.read_text()
+        assert inventory.group_of("duplicate") == "aaa"
+
+
+@pytest.mark.parametrize("group", ["bbb", READONLY_GROUP])
+async def test_clone_prefills_add_form_and_saves_independent_host(tmp_path, group):
+    from textual.widgets import Input, TextArea
+
+    from ghostcrt.ui.screens.group_picker import GroupPickerScreen
+
+    app, inventory, vault = make_vault_app(
+        tmp_path,
+        block="Host duplicate\n HostName server.example\n User ops\n Port 2222\n"
+        " IdentityFile ~/.ssh/one\n IdentityFile ~/.ssh/two\n"
+        " LocalForward 8080 localhost:80\n ServerAliveInterval 30\n",
+    )
+    vault.update_profile("ops", "test-secret")
+    vault.update_assignment("duplicate", "ops")
+    inventory.add("destination", Host(alias="duplicate-copy"))
+    source_path = tmp_path / ("config" if group == READONLY_GROUP else "includes/bbb.conf")
+    original = source_path.read_text()
+    async with app.run_test(size=(100, 30)) as pilot:
+        screen = app.screen
+        await highlight_alias(pilot, group, "duplicate")
+        source = screen._selected_host()
+        screen._host_clone()
+        await pilot.pause()
+        editor = app.screen
+        assert isinstance(editor, HostEditModal)
+        assert editor.is_new
+        assert not editor.query("#delete")
+        assert editor.query_one("#aliases", Input).value == "duplicate-copy-2"
+        assert editor.query_one("#hostname", Input).value == (source.hostname or "")
+        assert editor.query_one("#user", Input).value == source.user
+        assert editor.query_one("#vault-profile", Select).value == "ops"
+        if group == "bbb":
+            assert editor.query_one("#port", Input).value == "2222"
+            assert editor.query_one("#identity", TextArea).text == "~/.ssh/one\n~/.ssh/two"
+            assert editor._build_host().extra == source.extra
+        await pilot.press("escape")
+        assert source_path.read_text() == original
+        assert inventory.group_of("duplicate-copy-2") is None
+        screen._host_clone()
+        await pilot.pause()
+        await pilot.click("#save")
+        await pilot.pause()
+        assert isinstance(app.screen, GroupPickerScreen)
+        app.screen.dismiss("destination")
+        await pilot.pause()
+        assert inventory.group_of("duplicate-copy-2") == "destination"
+        assert source_path.read_text() == original
+        assert vault.profile_for("duplicate-copy-2") == "ops"

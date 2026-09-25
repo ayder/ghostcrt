@@ -38,10 +38,15 @@ class MenuBar(Horizontal):
         yield Button("Hosts", id="menu-hosts", flat=True)
         yield Button("Vault", id="menu-vault", flat=True)
         yield Button("Session", id="menu-session", flat=True)
+        yield Button("Help", id="menu-help", flat=True)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
-        if bid == "menu-hosts":
+        if bid == "menu-help":
+            from ghostcrt.ui.screens.help import HelpScreen
+
+            self.app.push_screen(HelpScreen())
+        elif bid == "menu-hosts":
             self.post_message(self.HostsAction("menu"))
         elif bid == "menu-vault":
             self.post_message(self.VaultAction("menu"))
