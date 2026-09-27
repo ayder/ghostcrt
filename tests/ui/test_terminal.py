@@ -152,7 +152,7 @@ async def test_terminal_renderer_preserves_ansi_and_truecolor_styles(monkeypatch
         set_timer = terminal.set_timer
 
         def delayed_timer(delay, callback=None, **kwargs):
-            if callback == terminal._flush_frame:
+            if callback == terminal._flush_throttled_frame:
                 delay = frame_delay
             return set_timer(delay, callback, **kwargs)
 
@@ -397,6 +397,101 @@ async def test_output_burst_batches_frames_without_delaying_terminal_replies(mon
         assert terminal.render_line(terminal.terminal.rows - 1).text.startswith("LATEST")
 
 
+async def test_output_across_loop_turns_and_scroll_share_one_frame_timer(monkeypatch):
+    app = TerminalTestApp()
+    async with app.run_test() as pilot:
+        session, terminal = await open_terminal(pilot, "sustained-output")
+        feed(session, "line\r\n" * 200)
+        await wait_for_frame(pilot, terminal)
+        snapshot = Mock(wraps=terminal.terminal.snapshot)
+        monkeypatch.setattr(terminal.terminal, "snapshot", snapshot)
+        # Hold the frame deadline so this checks scheduling, not machine speed.
+        scheduled = []
+
+        def hold_timer(delay, callback=None, **kwargs):
+            scheduled.append((delay, callback))
+            return Mock()
+
+        monkeypatch.setattr(terminal, "set_timer", hold_timer)
+        for _ in range(5):
+            feed(session, "next\r\n")
+            await asyncio.sleep(0)
+            assert snapshot.call_count == 0
+        terminal.on_mouse_scroll_up(scroll_event(terminal, up=True))
+        assert len(scheduled) == 1
+        delay, flush = scheduled[0]
+        assert delay == 1 / 60
+        assert flush is not None
+        flush()
+        assert snapshot.call_count == 1
+        assert terminal._frame_timer is None
+        frame = terminal.terminal.snapshot(force=True)
+        assert frame is not None
+        assert terminal._shadow.rows == tuple(patch.cells for patch in frame.row_patches)
+
+
+@pytest.mark.parametrize("defer", [False, True], ids=["before-loop-turn", "after-loop-turn"])
+@pytest.mark.parametrize("reset", [False, True], ids=["force-refresh", "reconnect-reset"])
+async def test_immediate_refresh_consumes_pending_output(monkeypatch, defer, reset):
+    app = TerminalTestApp()
+    async with app.run_test() as pilot:
+        session, terminal = await open_terminal(pilot, "immediate-refresh")
+        snapshot = Mock(wraps=terminal.terminal.snapshot)
+        monkeypatch.setattr(terminal.terminal, "snapshot", snapshot)
+        feed(session, "pending output")
+        if defer:
+            await asyncio.sleep(0)
+        assert snapshot.call_count == 0
+        if reset:
+            await terminal.reset_session()
+        else:
+            terminal.refresh_frame(force=True)
+        assert snapshot.call_count == 1
+        assert terminal._frame_timer is None
+        assert ("pending output" in terminal.render_line(0).text) is not reset
+        await wait_for_frame(pilot, terminal)
+        assert snapshot.call_count == 1
+
+
+@pytest.mark.parametrize("release", [False, True], ids=["sync-timeout", "sync-release"])
+async def test_synchronized_output_survives_frame_throttling(monkeypatch, release):
+    app = TerminalTestApp()
+    async with app.run_test() as pilot:
+        session, terminal = await open_terminal(pilot, "synchronized-output")
+        scheduled = {}
+
+        def hold_timer(delay, callback=None, **kwargs):
+            timer = Mock()
+            scheduled[delay] = (callback, timer)
+            return timer
+
+        monkeypatch.setattr(terminal, "set_timer", hold_timer)
+        feed(session, "\x1b[?2026hheld output")
+        await asyncio.sleep(0)
+        flush, _ = scheduled.pop(1 / 60)
+        flush()
+        assert "held output" not in terminal.render_line(0).text
+        timeout, timeout_timer = scheduled.pop(0.16)
+
+        if release:
+            feed(session, "\x1b[?2026l")
+            await asyncio.sleep(0)
+            timeout_timer.stop.assert_called_once()
+        else:
+            # Advance the emulator's hold deadline without a wall-clock sleep.
+            assert terminal.terminal._sync_started is not None
+            terminal.terminal._sync_started -= 1
+            timeout()
+
+        assert terminal._sync_timeout_timer is None
+        assert "held output" not in terminal.render_line(0).text
+        flush, _ = scheduled.pop(1 / 60)
+        flush()
+        assert terminal.render_line(0).text.startswith("held output")
+        assert not scheduled
+        assert terminal._frame_timer is None
+
+
 async def test_scrollbar_tracks_history_and_supports_drag_and_track_clicks():
     app = TerminalTestApp()
     async with app.run_test(size=(120, 40)) as pilot:
@@ -457,6 +552,7 @@ async def test_scrollbar_restores_primary_history_after_alternate_screen_and_res
         assert bar.position == terminal.terminal.viewport.offset
 
         feed(session, "pending frame")
+        await asyncio.sleep(0)  # Upstream may defer refresh until the next loop turn.
         assert terminal._frame_timer is not None
         await terminal.reset_session()
         await pilot.pause()
@@ -471,6 +567,7 @@ async def test_closing_terminal_cancels_pending_frame():
     async with app.run_test() as pilot:
         session, terminal = await open_terminal(pilot, "closing-frame")
         feed(session, "pending")
+        await asyncio.sleep(0)
         assert terminal._frame_timer is not None
         await app.screen.query_one(SessionTabs).close_active()
         await pilot.pause()

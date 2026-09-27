@@ -195,7 +195,7 @@ wheels = [
 
 [[package]]
 name = "ghostcrt"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
@@ -216,7 +216,7 @@ dev = [
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=23.1.0" },
     { name = "cryptography", specifier = ">=50.0.0" },
-    { name = "ghostty-textual", url = "https://github.com/ayder/ghostty-textual/releases/download/v0.0.2/ghostty_textual-0.0.2-py3-none-any.whl" },
+    { name = "ghostty-textual", url = "https://github.com/ayder/ghostty-textual/releases/download/v0.0.4/ghostty_textual-0.0.4-py3-none-any.whl" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
@@ -227,14 +227,14 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "ghostty-textual"
-version = "0.0.2"
-source = { url = "https://github.com/ayder/ghostty-textual/releases/download/v0.0.2/ghostty_textual-0.0.2-py3-none-any.whl" }
+version = "0.0.4"
+source = { url = "https://github.com/ayder/ghostty-textual/releases/download/v0.0.4/ghostty_textual-0.0.4-py3-none-any.whl" }
 dependencies = [
     { name = "pyghostty" },
     { name = "textual" },
 ]
 wheels = [
-    { url = "https://github.com/ayder/ghostty-textual/releases/download/v0.0.2/ghostty_textual-0.0.2-py3-none-any.whl", hash = "sha256:97635dda77e496fae586b7917dbdac36c22d78a970a07134811532cdd6ecf478" },
+    { url = "https://github.com/ayder/ghostty-textual/releases/download/v0.0.4/ghostty_textual-0.0.4-py3-none-any.whl", hash = "sha256:22b8bedb2b2e3e85ddeb9f3bd5137df7b2593d1d19e3736756f4188211138ca5" },
 ]
 
 [package.metadata]
