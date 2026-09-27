@@ -133,23 +133,24 @@ class TerminalWidget(TerminalView):
         session.on_output = self.feed
 
     def refresh_frame(self, *, force: bool = False) -> None:
-        # The upstream widget extracts every visible cell on every wheel event
-        # and output chunk. Keep input/VT processing immediate, but copy only
-        # one frame per tick so a trackpad burst cannot block the UI for seconds.
+        # Coalesce output and scrolling across event-loop turns. Upstream feed
+        # batching alone does not cap sustained output or trackpad redraws.
         if self.failed:
             return
         if force:
             self._cancel_frame_timer()
             super().refresh_frame(force=True)
         elif self._mounted_ready and self._frame_timer is None:
-            self._frame_timer = self.set_timer(1 / 60, self._flush_frame)
+            self._frame_timer = self.set_timer(1 / 60, self._flush_throttled_frame)
 
     def _cancel_frame_timer(self) -> None:
         if self._frame_timer is not None:
             self._frame_timer.stop()
             self._frame_timer = None
 
-    def _flush_frame(self) -> None:
+    def _flush_throttled_frame(self) -> None:
+        # Keep this distinct from TerminalView's deferred feed callback, which
+        # must reach our refresh_frame override before extracting a snapshot.
         self._frame_timer = None
         if self._mounted_ready:
             super().refresh_frame()

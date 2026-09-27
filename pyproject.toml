@@ -1,6 +1,6 @@
 [project]
 name = "ghostcrt"
-version = "0.3.0"
+version = "0.3.1"
 description = "Terminal UI for managing multiple SSH sessions with an encrypted password vault"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,7 +8,7 @@ license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 dependencies = [
   "textual==8.2.8",
-  "ghostty-textual @ https://github.com/ayder/ghostty-textual/releases/download/v0.0.2/ghostty_textual-0.0.2-py3-none-any.whl",
+  "ghostty-textual @ https://github.com/ayder/ghostty-textual/releases/download/v0.0.4/ghostty_textual-0.0.4-py3-none-any.whl",
   "cryptography>=50.0.0",
   "argon2-cffi>=23.1.0",
   "sshconf>=0.2.7",

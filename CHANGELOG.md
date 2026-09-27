@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 — 2026-09-27
+
+- Upgrade ghostty-textual to v0.0.4 for faster styled output, selection, and hyperlink rendering. Preserve GhostCRT's 60 Hz output and scroll batching with the library's deferred rendering.
+
 ## 0.3.0 — 2026-09-25
 
 - Introduce a compact terminal layout with a separated menu bar, one-row controls and session tabs, contextual footer hints, and a host drawer on narrow terminals. Colors follow the selected Textual theme.

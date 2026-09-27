@@ -48,7 +48,7 @@ ghostcrt
 
 Requires Python 3.12+ on macOS 13+ or glibc Linux 2.27+, on x86_64 or ARM64.
 The dependency is pinned to the published
-[`ghostty-textual` v0.0.2 wheel](https://github.com/ayder/ghostty-textual/releases/tag/v0.0.2)
+[`ghostty-textual` v0.0.4 wheel](https://github.com/ayder/ghostty-textual/releases/tag/v0.0.4)
 on GitHub; `uv sync` installs it and the bundled native library automatically.
 
 ```bash
