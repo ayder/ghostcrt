@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 — 2026-10-05
+
+- Preserve negotiated pixel mouse reporting when Ctrl+O recaptures the mouse, so host-group and terminal clicks retain their correct targets in Ghostty.
+- Fix focus-time crashes when clicking hosts, buttons, or menu options under themes such as Nord and Catppuccin. Respect the theme's cursor text style, including `none`.
+- Upgrade ghostty-textual to v0.0.5 with its exact pyghostty 0.1.3 dependency for the updated native terminal ABI. Retain GhostCRT's rendering, scrollback, input, and frame batching behavior.
+- The native library now retains a base codepoint plus at most 64 additional grapheme codepoints per cell; further combining codepoints are ignored.
+
 ## 0.3.1 — 2026-09-27
 
 - Upgrade ghostty-textual to v0.0.4 for faster styled output, selection, and hyperlink rendering. Preserve GhostCRT's 60 Hz output and scroll batching with the library's deferred rendering.

@@ -1,21 +1,101 @@
 from pathlib import Path
 
 import pytest
+from rich.style import Style
 from textual.app import App
-from textual.widgets import Collapsible, Input, OptionList, Tree
+from textual.theme import BUILTIN_THEMES
+from textual.widgets import Button, Collapsible, Input, OptionList, Tree
 
+from ghostcrt.app import GhostCRTApp
 from ghostcrt.config.inventory import HostInventory
 from ghostcrt.models import Host
 from ghostcrt.ssh.session import SshSession
 from ghostcrt.ui.screens.action_menu import ActionMenuScreen
 from ghostcrt.ui.screens.host_edit import HostEditModal
 from ghostcrt.ui.screens.main import MainScreen
-from ghostcrt.ui.widgets.host_list import HostList
+from ghostcrt.ui.widgets.host_list import HostList, HostNode, HostTree
 from ghostcrt.ui.widgets.session_tabs import SessionTabs
 
 
 class Preview(App):
     CSS_PATH = str(Path(__file__).parents[2] / 'src/ghostcrt/ui/compact.tcss')
+
+
+def focus_app(control, theme):
+    if control == 'button':
+        target = Button('Focus target', id='focus-target')
+    elif control == 'tree':
+        target = HostTree('Hosts', id='focus-target')
+        target.show_root = False
+        target.root.add_leaf('synthetic-host', HostNode(Host(alias='synthetic-host'), 'test', True))
+    else:
+        target = OptionList('Focus target', id='focus-target')
+
+    class FocusPreview(Preview):
+        BINDINGS = GhostCRTApp.BINDINGS
+        action_toggle_mouse = GhostCRTApp.action_toggle_mouse
+        _handle_exception = GhostCRTApp._handle_exception
+
+        def compose(self):
+            yield Input(id='focus-neutral')
+            yield target
+
+    app = FocusPreview()
+    app.theme = theme
+    return app, target
+
+
+def assert_theme_focus_style(app, target, control):
+    expected = Style.parse(app.get_css_variables()['block-cursor-text-style'])
+    if control == 'button':
+        actual = target.styles.text_style
+    else:
+        component = 'tree--cursor' if control == 'tree' else 'option-list--option-highlighted'
+        actual = target.get_component_styles(component).text_style
+    assert actual == expected
+    assert app.focused is target
+    assert app._exception is None
+
+
+@pytest.mark.parametrize('theme', sorted(BUILTIN_THEMES))
+@pytest.mark.parametrize('control', ['button', 'tree', 'options'])
+async def test_focused_controls_follow_every_builtin_theme(theme, control):
+    app, target = focus_app(control, theme)
+    async with app.run_test(size=(80, 24)) as pilot:
+        assert app.focused.id == 'focus-neutral'
+        await pilot.click(target, offset=(2, 0))
+        assert_theme_focus_style(app, target, control)
+
+        app.theme = 'ansi-dark'
+        await pilot.pause()
+        assert_theme_focus_style(app, target, control)
+        app.theme = theme
+        await pilot.pause()
+        assert_theme_focus_style(app, target, control)
+
+        app.query_one('#focus-neutral').focus()
+        await pilot.pause()
+        await pilot.press('tab')
+        assert_theme_focus_style(app, target, control)
+
+
+async def test_host_click_after_mouse_release_and_recapture():
+    app, tree = focus_app('tree', 'nord')
+    async with app.run_test(size=(80, 24)) as pilot:
+        driver = app._driver
+        calls = []
+        driver._mouse = True
+        driver._disable_mouse_support = lambda: calls.append(('disable', driver._mouse))
+        driver._enable_mouse_support = lambda: calls.append(('enable', driver._mouse))
+        await pilot.press('ctrl+o')
+        assert driver._mouse is False
+        await pilot.press('ctrl+o')
+        assert driver._mouse is True
+        assert calls == [('disable', True), ('enable', True)]
+
+        await pilot.click(tree, offset=(2, 0))
+        assert tree.cursor_node.data.host.alias == 'synthetic-host'
+        assert_theme_focus_style(app, tree, 'tree')
 
 
 def main_app(tmp_path):

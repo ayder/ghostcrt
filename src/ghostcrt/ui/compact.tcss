@@ -254,17 +254,17 @@ OptionList > .option-list--option { padding: 0 1; }
 OptionList:focus > .option-list--option-highlighted {
     color: $block-cursor-foreground;
     background: $block-cursor-background;
-    text-style: bold $block-cursor-text-style;
+    text-style: $block-cursor-text-style;
 }
 Tree:focus > .tree--cursor {
     color: $block-cursor-foreground;
     background: $block-cursor-background;
-    text-style: bold $block-cursor-text-style;
+    text-style: $block-cursor-text-style;
 }
 Button:focus {
     color: $block-cursor-foreground;
     background: $block-cursor-background;
-    text-style: bold $block-cursor-text-style;
+    text-style: $block-cursor-text-style;
 }
 #host-advanced {
     height: auto;

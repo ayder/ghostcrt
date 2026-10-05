@@ -23,6 +23,10 @@ def _supports_toggle(driver: Any) -> bool:
         and hasattr(driver, "_mouse")
         and callable(getattr(driver, "_enable_mouse_support", None))
         and callable(getattr(driver, "_disable_mouse_support", None))
+        and (
+            not getattr(driver, "_mouse_pixels", False)
+            or callable(getattr(driver, "_enable_mouse_pixels", None))
+        )
     )
 
 
@@ -50,4 +54,8 @@ def toggle_mouse_capture(driver: Any) -> bool | None:
 
     driver._mouse = True
     driver._enable_mouse_support()
+    # Generic mouse support selects cell-based SGR encoding. Textual's input
+    # parser retains its negotiated pixel conversion, so restore that mode last.
+    if getattr(driver, "_mouse_pixels", False):
+        driver._enable_mouse_pixels()
     return True
