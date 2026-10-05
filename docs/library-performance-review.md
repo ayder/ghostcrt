@@ -1,12 +1,12 @@
 # ghostty-textual performance adoption review
 
-GhostCRT now pins the published ghostty-textual v0.0.4 wheel, adopting faster
-colored output, selection, and hyperlink rendering while preserving its 60 Hz
-output/scroll batching. The original review and measurements below compared
-v0.0.2 with the library's performance working tree based on `eeaf9fa`.
+GhostCRT now pins the published ghostty-textual v0.0.5 wheel, retaining the faster
+colored output, selection, and hyperlink rendering adopted with v0.0.4 while
+preserving its 60 Hz output/scroll batching. The original review and measurements
+below compared v0.0.2 with the library's performance working tree based on `eeaf9fa`.
 
 The v0.0.4 release points to commit `45c2aa1fdf410b970e83a5ef60cb3af4cd556322`.
-The downloaded wheel's SHA-256 matches the library handoff and `uv.lock`:
+The downloaded wheel's SHA-256 matched the library handoff and adoption lockfile:
 `22b8bedb2b2e3e85ddeb9f3bd5137df7b2593d1d19e3736756f4188211138ca5`.
 Its Python sources match the frozen candidate used for the review and benchmarks.
 
@@ -101,3 +101,27 @@ Both GhostCRT distributions built successfully. Installing the built GhostCRT
 wheel into a fresh environment resolved ghostty-textual v0.0.4 and passed CLI,
 deferred feed/render, reset, and unmount smoke checks outside the source tree.
 The eight skipped tests require the local SSH test server and sshpass.
+
+## v0.0.5 compatibility assessment
+
+The v0.0.5 wheel pins `pyghostty==0.1.3` and adapts terminal construction,
+scrollback configuration, color and mode getters, and synchronous clipboard
+replies to the updated native ABI. Its verified SHA-256 is
+`1c70f82b98bf8a32704e85d7a2dacd12b3aec99e2eecb96007726224e3aee162`.
+
+Before updating the consumer pin, isolated tests on the same macOS ARM64,
+Python 3.12.12 and Textual 8.2.8 environment passed **362 tests, with 8 skipped**
+against both v0.0.4 and v0.0.5. All **140 upstream tests** shipped in the source
+archive passed against the installed v0.0.5 wheel. The skipped consumer tests
+require a configured local SSH test server. Linux, Intel and Python 3.14
+coverage remain the responsibility of hosted CI.
+
+Repeating the consumer benchmark above with 60 samples per case found median
+changes from -3.5% to +0.7% across the eight workloads, with no material slowdown
+observed in that run. These measurements retain the synthetic CPU scope and
+limitations described above.
+
+The native library now retains a cell's base codepoint plus at most 64 additional
+grapheme codepoints, including fragmented input. Further combining codepoints
+are ignored. Upstream regression coverage for this cap and UTF-8 buffer growth
+passed. No GhostCRT widget or scheduling changes were needed for this release.
