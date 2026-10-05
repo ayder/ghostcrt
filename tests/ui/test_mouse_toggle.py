@@ -13,12 +13,25 @@ instead of ctrl+o silently doing nothing.
 
 from __future__ import annotations
 
+from pathlib import Path
+from types import MethodType
+
+import pytest
+from ghostty_textual import MouseEvent as NativeMouseEvent
+from ghostty_textual import Terminal
+from textual._xterm_parser import XTermParser
 from textual.app import App
 from textual.binding import Binding
 from textual.drivers.headless_driver import HeadlessDriver
+from textual.drivers.linux_driver import LinuxDriver
 
 from ghostcrt.app import GhostCRTApp
+from ghostcrt.config.inventory import HostInventory
+from ghostcrt.ssh.session import SshSession
 from ghostcrt.ui.mouse import mouse_is_captured, toggle_mouse_capture
+from ghostcrt.ui.screens.main import MainScreen
+from ghostcrt.ui.widgets.host_list import HostTree
+from ghostcrt.ui.widgets.session_tabs import SessionTabs
 
 
 class RecordingDriver:
@@ -110,6 +123,7 @@ async def test_textual_still_exposes_the_private_mouse_api():
     assert hasattr(HeadlessDriver(App(), size=(80, 24)), "_mouse")
     assert callable(LinuxDriver._enable_mouse_support)
     assert callable(LinuxDriver._disable_mouse_support)
+    assert callable(LinuxDriver._enable_mouse_pixels)
 
     # toggle_mouse_capture's call ordering exists only because of these early
     # returns. If Textual drops them the ordering comment stops making sense.
@@ -166,3 +180,147 @@ async def test_pressing_ctrl_o_reaches_the_driver(tmp_home):
 
         assert [name for name, _ in calls] == ["disable", "enable"]
         assert driver._mouse is True
+
+
+class NativeProtocolDriver:
+    """Run real Textual control writes through Ghostty's native terminal core."""
+
+    _enable_mouse_support = LinuxDriver._enable_mouse_support
+    _disable_mouse_support = LinuxDriver._disable_mouse_support
+    _enable_mouse_pixels = LinuxDriver._enable_mouse_pixels
+
+    def __init__(self, terminal):
+        self._mouse = True
+        self._mouse_pixels = False
+        self.terminal = terminal
+
+    def write(self, data):
+        self.terminal.feed(data.encode())
+
+    def flush(self):
+        pass
+
+
+def negotiate_mouse_protocol(driver, terminal, pixels, cell_size):
+    cell_width, cell_height = cell_size
+    native = terminal._native
+    size = native.ffi.new(
+        'GhosttyMouseEncoderSize*',
+        {
+            'size': native.ffi.sizeof('GhosttyMouseEncoderSize'),
+            'screen_width': 120 * cell_width,
+            'screen_height': 40 * cell_height,
+            'cell_width': cell_width,
+            'cell_height': cell_height,
+        },
+    )
+    native.lib.ghostty_mouse_encoder_setopt(
+        terminal._mouse_encoder, native.lib.GHOSTTY_MOUSE_ENCODER_OPT_SIZE, size
+    )
+    driver._enable_mouse_support()
+    parser = XTermParser()
+    if pixels:
+        driver._enable_mouse_pixels()
+        list(parser.feed(f'\x1b[48;40;120;{40 * cell_height};{120 * cell_width}t'))
+        assert parser.mouse_pixels
+    return parser
+
+
+@pytest.mark.parametrize('pixels', [False, True], ids=['cells', 'pixels'])
+@pytest.mark.parametrize('cell_size', [(10, 20), (12, 24)])
+def test_mouse_roundtrip_preserves_negotiated_coordinates(pixels, cell_size):
+    with Terminal(120, 40) as terminal:
+        driver = NativeProtocolDriver(terminal)
+        parser = negotiate_mouse_protocol(driver, terminal, pixels, cell_size)
+        physical = NativeMouseEvent(20.5 * cell_size[0], 11.5 * cell_size[1])
+        original = terminal.encode_mouse(physical)
+        assert original is not None
+        event, = parser.feed(original.decode())
+        assert (event.x, event.y) == (20, 11)
+
+        for _ in range(3):
+            assert toggle_mouse_capture(driver) is False
+            assert terminal.encode_mouse(physical) is None
+            assert toggle_mouse_capture(driver) is True
+            packet = terminal.encode_mouse(physical)
+            assert packet is not None
+            event, = parser.feed(packet.decode())
+            assert (event.x, event.y) == (20, 11)
+            assert packet == original
+
+
+@pytest.mark.parametrize('pixels', [False, True], ids=['cells', 'pixels'])
+async def test_recaptured_protocol_click_reaches_host_group(tmp_path, pixels):
+    includes = tmp_path / 'includes'
+    includes.mkdir()
+    (includes / 'production.conf').write_text('Host synthetic-host\n')
+    config = tmp_path / 'config'
+    config.write_text(f'Include {includes}/*\n')
+
+    class RoutingApp(App):
+        CSS_PATH = str(Path(__file__).parents[2] / 'src/ghostcrt/ui/compact.tcss')
+        BINDINGS = GhostCRTApp.BINDINGS
+        action_toggle_mouse = GhostCRTApp.action_toggle_mouse
+
+        def on_mount(self):
+            self.main_screen = MainScreen(None, HostInventory(config, includes))
+            self.push_screen(self.main_screen)
+
+    app = RoutingApp()
+    app.theme = 'nord'
+    with Terminal(120, 40) as terminal:
+        async with app.run_test(size=(120, 40)) as pilot:
+            tree = app.screen.query_one(HostTree)
+            group = next(node for node in tree.root.children if node.data.group == 'production')
+            tree.move_cursor(group.children[0])
+            await pilot.pause()
+            driver = app._driver
+            driver._mouse = True
+            driver._mouse_pixels = False
+            driver.write = lambda data: terminal.feed(data.encode())
+            for method in ('_enable_mouse_support', '_disable_mouse_support', '_enable_mouse_pixels'):
+                setattr(driver, method, MethodType(getattr(LinuxDriver, method), driver))
+            parser = negotiate_mouse_protocol(driver, terminal, pixels, (10, 20))
+            await pilot.press('ctrl+o')
+            assert driver._mouse is False
+            await pilot.press('ctrl+o')
+            assert driver._mouse is True
+
+            x = tree.region.x + 8
+            y = tree.region.y + group.line
+            for action in ('press', 'release'):
+                packet = terminal.encode_mouse(NativeMouseEvent(x * 10 + 5, y * 20 + 10, action))
+                assert packet is not None
+                for event in parser.feed(packet.decode()):
+                    driver.process_message(event)
+            await pilot.pause()
+            assert app.screen is app.main_screen
+            assert app.focused is tree
+            assert tree.cursor_node is group
+            assert app._exception is None
+
+            tabs = app.main_screen.query_one(SessionTabs)
+            await tabs.add_session(SshSession('synthetic-session'))
+            await pilot.pause()
+            target = tabs.active_terminal
+            tree.focus()
+            await pilot.pause()
+            x = target.region.x + 5
+            y = target.region.y + 3
+            for action in ('press', 'release'):
+                packet = terminal.encode_mouse(NativeMouseEvent(x * 10 + 5, y * 20 + 10, action))
+                assert packet is not None
+                for event in parser.feed(packet.decode()):
+                    driver.process_message(event)
+            await pilot.pause()
+            assert app.screen is app.main_screen
+            assert app.focused is target
+            assert app._exception is None
+
+
+def test_pixel_driver_without_restore_support_is_unchanged():
+    driver = RecordingDriver(mouse=False)
+    driver._mouse_pixels = True
+    assert toggle_mouse_capture(driver) is None
+    assert driver._mouse is False
+    assert driver.calls == []
