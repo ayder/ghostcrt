@@ -170,7 +170,9 @@ one from the host editor's dropdown or **Vault → Assign profile to selected ho
 - Host-key prompts are handled by real `ssh` inside the terminal widget. Vault
   password connections first make a password-free verification connection, so
   you can accept or reject a new host key before `sshpass` starts the login.
-- Vault files are format 2; ghostcrt 0.1.0 cannot open them, and existing vaults migrate on first change.
+- Vault files are format 3 from 0.4.0, which adds snippets; ghostcrt 0.3.2 and earlier cannot
+  open them. Older vaults (format 1 or format 2) open normally and are rewritten as format 3 on
+  their first change.
 
 ## Limitations (v1)
 
