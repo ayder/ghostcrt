@@ -46,6 +46,9 @@ ANSI_BRIGHT_BLACK = 8
 
 
 class FakeVault:
+    def snippets(self) -> list:
+        return []
+
     def get(self, alias: str) -> None:
         return None
 

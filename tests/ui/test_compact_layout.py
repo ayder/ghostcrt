@@ -17,6 +17,11 @@ from ghostcrt.ui.widgets.host_list import HostList, HostNode, HostTree
 from ghostcrt.ui.widgets.session_tabs import SessionTabs
 
 
+class NoSnippetsVault:
+    def snippets(self) -> list:
+        return []
+
+
 class Preview(App):
     CSS_PATH = str(Path(__file__).parents[2] / 'src/ghostcrt/ui/compact.tcss')
 
@@ -106,7 +111,7 @@ def main_app(tmp_path):
     config.write_text(f'Include {includes}/*\n')
     class MainPreview(Preview):
         def on_mount(self):
-            self.main_screen = MainScreen(None, HostInventory(config, includes))
+            self.main_screen = MainScreen(NoSnippetsVault(), HostInventory(config, includes))
             self.push_screen(self.main_screen)
 
     return MainPreview()

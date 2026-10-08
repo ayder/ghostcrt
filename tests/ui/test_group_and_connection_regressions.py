@@ -14,6 +14,9 @@ from ghostcrt.ui.widgets.host_list import HostList
 
 
 class FakeVault:
+    def snippets(self) -> list:
+        return []
+
     def __init__(self, password=None):
         self.password = password
 

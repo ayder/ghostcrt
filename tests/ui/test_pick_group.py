@@ -13,6 +13,9 @@ from ghostcrt.ui.widgets.host_list import HostList
 
 
 class FakeVault:
+    def snippets(self) -> list:
+        return []
+
     def get(self, alias):
         return None
 

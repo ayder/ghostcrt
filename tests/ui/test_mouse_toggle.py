@@ -34,6 +34,11 @@ from ghostcrt.ui.widgets.host_list import HostTree
 from ghostcrt.ui.widgets.session_tabs import SessionTabs
 
 
+class NoSnippetsVault:
+    def snippets(self) -> list:
+        return []
+
+
 class RecordingDriver:
     """Stands in for a real terminal driver, recording call order.
 
@@ -263,7 +268,7 @@ async def test_recaptured_protocol_click_reaches_host_group(tmp_path, pixels):
         action_toggle_mouse = GhostCRTApp.action_toggle_mouse
 
         def on_mount(self):
-            self.main_screen = MainScreen(None, HostInventory(config, includes))
+            self.main_screen = MainScreen(NoSnippetsVault(), HostInventory(config, includes))
             self.push_screen(self.main_screen)
 
     app = RoutingApp()
