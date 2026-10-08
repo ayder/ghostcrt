@@ -79,7 +79,7 @@ ghostcrt [--config PATH] [--vault PATH] [--theme NAME] [--debug] [-h] [--version
 | `Ctrl+P` | Command palette (themes, etc.) |
 | `Ctrl+H` | Show keyboard help |
 | `Ctrl+O` | Toggle mouse capture / native terminal selection |
-| `Ctrl+T` | Release terminal focus and return to the host list |
+| `Ctrl+T` | From the terminal, show and focus the host list; from Hosts, hide it for a full-width terminal |
 | `Ctrl+N` | Focus host list |
 | `/` | Focus host filter (outside the terminal) |
 | `F10` | Focus menu bar (outside the terminal) |

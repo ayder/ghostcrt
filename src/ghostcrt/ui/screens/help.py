@@ -58,7 +58,7 @@ class HelpScreen(ModalScreen[None]):
         ("↑↓ / ←→", "Choose an action / switch open menus."),
         ("enter", "Connect to the selected host."),
         ("ctrl+w", "Close the active SSH session."),
-        ("ctrl+t", "Release terminal focus and return to Hosts."),
+        ("ctrl+t", "Switch between terminal and Hosts; from Hosts, hide them."),
         ("ctrl+o", "Toggle mouse capture for native terminal selection."),
         ("ctrl+p", "Open the command palette and theme picker."),
         ("ctrl+h", "Show or close this help window."),

@@ -78,6 +78,7 @@ MainScreen.compact HostList {
     &:ansi { background: $ansi-background; }
 }
 MainScreen.compact.hosts-open HostList { display: block; }
+MainScreen.hosts-hidden HostList { display: none; }
 
 SessionTabs Tabs {
     height: 1;

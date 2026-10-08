@@ -11,7 +11,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import Input, Static
+from textual.widgets import Input, Static, TabbedContent
 
 from ghostcrt.config.include_bootstrap import include_is_configured
 from ghostcrt.config.inventory import READONLY_GROUP, HostInventory
@@ -48,8 +48,8 @@ class MainScreen(Screen):
         Binding("ctrl+w", "close_session", "Close session", show=False),
         Binding(
             "ctrl+t",
-            "focus_hosts",
-            "Release terminal",
+            "toggle_hosts",
+            "Toggle hosts",
             key_display="Ctrl+T",
             show=False,
             priority=True,
@@ -133,18 +133,37 @@ class MainScreen(Screen):
         elif isinstance(event.widget, Input):
             hint = "FILTER  Down Hosts · Esc Terminal · F10 Menu"
         elif event.widget.id == "host-tree":
-            hint = "HOSTS  ↑↓ Navigate · Enter Connect · / Filter · F10 Menu · Esc Terminal"
+            hint = (
+                "HOSTS  ↑↓ Navigate · Enter Connect · / Filter · Ctrl+T Hide · F10 Menu"
+                " · Esc Terminal"
+            )
         else:
             hint = "MENU  Enter Open · Tab Next · Esc Terminal"
         self.query_one("#context-status", Static).update(f"ghostcrt · Ctrl+H Help · {hint}")
 
     def action_focus_search(self) -> None:
+        self.remove_class("hosts-hidden")
         self.add_class("hosts-open")
         self.query_one(HostList).focus_filter()
 
     def action_focus_hosts(self) -> None:
+        self.remove_class("hosts-hidden")
         self.add_class("hosts-open")
         self.query_one(HostList).focus_list()
+
+    def action_toggle_hosts(self) -> None:
+        if isinstance(self.app.focused, TerminalWidget):
+            self.action_focus_hosts()
+        elif self.query_one(SessionTabs).active_terminal is not None:
+            # Hidden hosts give the terminal the full width until Ctrl+T or
+            # Ctrl+N brings them back; Esc keeps them beside the terminal.
+            self.add_class("hosts-hidden")
+            self.action_focus_terminal()
+
+    @on(TabbedContent.Cleared)
+    def on_sessions_cleared(self) -> None:
+        if self.has_class("hosts-hidden"):
+            self.action_focus_hosts()
 
     @on(TerminalWidget.ReleaseFocus)
     def on_terminal_release_focus(self) -> None:
