@@ -1,9 +1,12 @@
 # ghostcrt
 
 Modern terminal UI for managing multiple SSH sessions with an encrypted
-password vault. Inspired by tools like `lazyssh`.
+password vault. Inspired by SecureCRT®.
 
-Licensed under [GNU GPLv3](LICENSE) (GPL-3.0-only).
+Licensed under [GNU GPLv3](https://github.com/ayder/ghostcrt/blob/main/LICENSE) (GPL-3.0-only).
+
+SecureCRT is a registered trademark of VanDyke Software, Inc. ghostcrt is not affiliated with or
+endorsed by VanDyke Software.
 
 ## Compact terminal UI
 
@@ -40,7 +43,7 @@ macOS: `brew install hudochenkov/sshpass/sshpass` (or your preferred tap)
 ## Install
 
 ```bash
-uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.3.0/ghostcrt-0.3.0-py3-none-any.whl
+uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.4.0/ghostcrt-0.4.0-py3-none-any.whl
 ghostcrt
 ```
 
@@ -79,8 +82,8 @@ ghostcrt [--config PATH] [--vault PATH] [--theme NAME] [--debug] [-h] [--version
 | `Ctrl+P` | Command palette (themes, etc.) |
 | `Ctrl+H` | Show keyboard help |
 | `Ctrl+O` | Toggle mouse capture / native terminal selection |
-| `Ctrl+T` | Release terminal focus and return to the host list |
-| `Ctrl+N` | Focus host list |
+| `Ctrl+T` | From the terminal, show and focus the host list; from Hosts, hide it for a full-width terminal |
+| `Ctrl+N`, then `1`–`5` | In the terminal: type that snippet. Elsewhere `Ctrl+N` focuses the host list |
 | `/` | Focus host filter (outside the terminal) |
 | `F10` | Focus menu bar (outside the terminal) |
 | `Esc` (Hosts) | Return to active terminal and close the narrow host drawer |
@@ -162,6 +165,15 @@ directives**, one `Directive value` entry per line.
 A profile is a named password, created with **Vault → Create / update profile…**. Assign
 one from the host editor's dropdown or **Vault → Assign profile to selected host…**; `(none)` removes the assignment.
 
+## Snippets
+
+Vault → **Snippets…** stores up to five snippets, each with a short name and a text.
+In the terminal, press `Ctrl+N` and then `1`–`5`, or click a snippet's button in the footer, to
+type it into the session. `\n` (or a real line break) is typed as Enter, and `\\` types a single
+backslash. Snippets are typed as keystrokes, not pasted, so a trailing `\n` submits the line.
+They are encrypted in the vault, so they can hold passwords. The text is shown in clear only
+while the snippet is open in its editor.
+
 ## Security notes
 
 - Master password is never stored. Lost key ⇒ **Reset vault…** and re-enter secrets.
@@ -170,7 +182,9 @@ one from the host editor's dropdown or **Vault → Assign profile to selected ho
 - Host-key prompts are handled by real `ssh` inside the terminal widget. Vault
   password connections first make a password-free verification connection, so
   you can accept or reject a new host key before `sshpass` starts the login.
-- Vault files are format 2; ghostcrt 0.1.0 cannot open them, and existing vaults migrate on first change.
+- Vault files are format 3 from 0.4.0, which adds snippets; ghostcrt 0.3.2 and earlier cannot
+  open them. Older vaults (format 1 or format 2) open normally and are rewritten as format 3 on
+  their first change.
 
 ## Limitations (v1)
 
@@ -184,8 +198,16 @@ one from the host editor's dropdown or **Vault → Assign profile to selected ho
 
 ```bash
 uv run pytest
-uv run ruff check src tests
+uv run --no-project python scripts/checks.py         # every CI check, this OS, every Python
+uv run --no-project python scripts/checks.py --all   # plus the Ubuntu jobs in Docker
 ```
+
+CI and the local gate run the same list of checks, kept in `pyproject.toml` under
+`[tool.ghostcrt.checks]`: locked sync, Ruff (uncached), tests, a dependency audit on
+Ubuntu/Python 3.12, wheel and source builds, `twine check`, and an installed-wheel smoke
+test. The runner uses the uv version pinned there, and `tests/test_ci_drift.py` fails if
+the workflows stop matching it. `--all` runs the committed tree (`HEAD`) in an
+`ubuntu:24.04` container as a non-root user, so Docker must be running.
 
 Host-key integration tests use an optional local Docker SSH server and isolated
 temporary `known_hosts` files. With `sshpass` installed:
@@ -208,7 +230,7 @@ It uses OpenSSH's `-F` option, which also bypasses the system-wide SSH config.
 The setup check requires a leading, unconditional Include covering all group
 files. Existing partial or conditional includes do not satisfy this check.
 
-GitHub CI runs tests and builds on Linux and macOS.
+GitHub CI runs the checks above on Ubuntu 24.04 and macOS 14 with Python 3.12 and 3.14.
 
 ## Releases
 

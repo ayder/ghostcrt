@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from textual import on
 from textual.app import ComposeResult
@@ -33,8 +34,11 @@ class SessionTabs(Container):
     }
     """
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(
+        self, *, snippet_text: Callable[[int], str | None] | None = None, **kwargs
+    ) -> None:
         super().__init__(**kwargs)
+        self._snippet_text = snippet_text
         self._sessions: dict[str, SshSession] = {}
         self._counter = 0
         self._close_lock = asyncio.Lock()
@@ -76,7 +80,9 @@ class SessionTabs(Container):
             self._sessions[pane_id] = session
             title = tab_title(session.alias, session.state, session.exit_code)
             tabs = self.query_one("#session-tabs", SessionTabbedContent)
-            terminal = TerminalWidget(session, id=f"term-{pane_id}")
+            terminal = TerminalWidget(
+                session, id=f"term-{pane_id}", snippet_text=self._snippet_text
+            )
             pane = TabPane(title, TerminalPane(terminal), id=pane_id)
 
             def on_state(state: SessionState) -> None:

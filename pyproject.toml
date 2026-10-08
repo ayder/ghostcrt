@@ -1,11 +1,28 @@
 [project]
 name = "ghostcrt"
-version = "0.3.2"
+version = "0.4.0"
 description = "Terminal UI for managing multiple SSH sessions with an encrypted password vault"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
+authors = [{ name = "Sinan Alyuruk" }]
+keywords = ["ssh", "ssh-client", "terminal", "tui", "textual", "session-manager", "password-vault"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: System :: Networking",
+  "Topic :: System :: Systems Administration",
+  "Topic :: Terminals",
+]
 dependencies = [
   "textual==8.2.8",
   "ghostty-textual @ https://github.com/ayder/ghostty-textual/releases/download/v0.0.5/ghostty_textual-0.0.5-py3-none-any.whl",
@@ -19,6 +36,7 @@ dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.24",
   "ruff>=0.8",
+  "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -36,7 +54,7 @@ build-backend = "hatchling.build"
 packages = ["src/ghostcrt"]
 
 [tool.hatch.build]
-exclude = ["/.ayder"]
+exclude = ["/.ayder", "/.superpowers"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -56,3 +74,56 @@ ignore = [
   "S110",    # try/except pass for best-effort UI cleanup
   "ASYNC222",  # WNOHANG waitpid in async poll loop
 ]
+
+# The one list of checks. CI runs scripts/checks.py for each os/python pair, and
+# `uv run --no-project python scripts/checks.py --all` runs every pair locally
+# (the ubuntu ones in Docker). tests/test_ci_drift.py fails if the workflows stop
+# matching this table, and tests/test_packaging.py ties the Python classifiers to it.
+[tool.ghostcrt.checks]
+uv = "0.12.10"
+os = ["ubuntu-24.04", "macos-14"]
+python = ["3.12", "3.14"]
+
+[[tool.ghostcrt.checks.step]]
+name = "sync"
+run = "uv sync --locked --all-extras"
+
+[[tool.ghostcrt.checks.step]]
+name = "lint"
+run = "uv run --no-sync ruff check --no-cache src tests scripts"
+
+[[tool.ghostcrt.checks.step]]
+name = "test"
+run = "uv run --no-sync pytest -q"
+
+[[tool.ghostcrt.checks.step]]
+name = "audit"
+run = "uvx pip-audit==2.10.1 --path {purelib} --progress-spinner off"
+only = { os = "ubuntu-24.04", python = "3.12" }
+
+[[tool.ghostcrt.checks.step]]
+name = "build"
+run = "uv build --out-dir {dist}"
+
+[[tool.ghostcrt.checks.step]]
+name = "metadata"
+run = "uvx twine==7.0.0 check --strict {dist}/*"
+
+[[tool.ghostcrt.checks.step]]
+name = "wheel-venv"
+run = "uv venv --python {python} {smoke}"
+
+[[tool.ghostcrt.checks.step]]
+name = "wheel-install"
+run = "uv pip install --python {smoke}/bin/python {dist}/*.whl"
+
+[[tool.ghostcrt.checks.step]]
+name = "wheel-cli"
+run = "{smoke}/bin/ghostcrt --version"
+expect = "ghostcrt {version}"
+cwd = "tmp"
+
+[[tool.ghostcrt.checks.step]]
+name = "wheel-import"
+run = "{smoke}/bin/python -c \"from ghostcrt.ui.widgets.terminal import TerminalWidget; from ghostty_textual import Terminal; t = Terminal(80, 24); t.feed(b'smoke'); t.close()\""
+cwd = "tmp"

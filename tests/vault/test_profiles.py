@@ -71,14 +71,14 @@ def write_v2_raw(path: Path, master: str, obj: object) -> None:
 
 
 class TestVaultFormat:
-    def test_new_vault_writes_version_2_with_two_key_payload(self, tmp_path):
+    def test_new_vault_writes_version_3_with_three_key_payload(self, tmp_path):
         path = tmp_path / "vault.enc"
         Vault.create(path, "synthetic-master")
 
         version, payload = raw_payload(path, "synthetic-master")
 
-        assert version == 2
-        assert set(payload) == {"profiles", "hosts"}
+        assert version == 3
+        assert set(payload) == {"profiles", "hosts", "snippets"}
 
     def test_unknown_version_rejected_before_kdf(self, tmp_path, monkeypatch):
         path = tmp_path / "vault.enc"
@@ -86,7 +86,7 @@ class TestVaultFormat:
             struct.pack(
                 HEADER_FMT,
                 MAGIC,
-                3,
+                4,
                 crypto.DEFAULT_TIME_COST,
                 crypto.DEFAULT_MEMORY_COST,
                 crypto.DEFAULT_PARALLELISM,
@@ -117,7 +117,7 @@ class TestVaultFormat:
         assert v.get(long_id) == "pw2"
         assert path.read_bytes() == before
 
-    def test_migrated_vault_saved_as_version_2_and_overlong_id_is_editable(self, tmp_path):
+    def test_migrated_vault_saved_as_version_3_and_overlong_id_is_editable(self, tmp_path):
         path = tmp_path / "vault.enc"
         long_id = "x" * 65
         write_v1(path, "synthetic-master", {"db": "pw1", long_id: "pw2"})
@@ -126,7 +126,7 @@ class TestVaultFormat:
         v.update_profile("ops", "s3")
 
         version, payload = raw_payload(path, "synthetic-master")
-        assert version == 2
+        assert version == 3
         assert payload["hosts"] == {"db": "db", long_id: long_id}
         assert len(payload["profiles"]) == 3
 

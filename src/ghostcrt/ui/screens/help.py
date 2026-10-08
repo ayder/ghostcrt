@@ -51,14 +51,15 @@ class HelpScreen(ModalScreen[None]):
     """
 
     SHORTCUTS: ClassVar[list[tuple[str, str]]] = [
-        ("ctrl+n", "Focus the Hosts list."),
+        ("ctrl+n", "In the terminal: then 1–5 types a snippet. Elsewhere: focus Hosts."),
         ("/", "Search and filter hosts (outside the terminal)."),
         ("f10", "Focus the menu bar (outside the terminal)."),
         ("escape", "Return from Hosts to the active terminal."),
         ("↑↓ / ←→", "Choose an action / switch open menus."),
         ("enter", "Connect to the selected host."),
         ("ctrl+w", "Close the active SSH session."),
-        ("ctrl+t", "Release terminal focus and return to Hosts."),
+        ("ctrl+t", "Switch between terminal and Hosts; from Hosts, hide them."),
+        ("Vault menu", "Snippets… stores up to five snippets in the vault."),
         ("ctrl+o", "Toggle mouse capture for native terminal selection."),
         ("ctrl+p", "Open the command palette and theme picker."),
         ("ctrl+h", "Show or close this help window."),

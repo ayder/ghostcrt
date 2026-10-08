@@ -78,6 +78,7 @@ MainScreen.compact HostList {
     &:ansi { background: $ansi-background; }
 }
 MainScreen.compact.hosts-open HostList { display: block; }
+MainScreen.hosts-hidden HostList { display: none; }
 
 SessionTabs Tabs {
     height: 1;
@@ -90,7 +91,7 @@ SessionTabs Underline {
 /* Compact rectangular windows with a single column of interior padding. */
 #action-menu-box, #group-picker-box, #profile-picker-box,
 #profile-edit-box, #unlock-box, #confirm-close-box, #confirm-reset,
-#include-box, #help-box, #host-edit-box {
+#include-box, #help-box, #host-edit-box, #snippet-picker-box, #snippet-edit-box {
     border: solid $primary;
     padding: 0 1;
     max-width: 96%;
@@ -99,8 +100,12 @@ SessionTabs Underline {
     scrollbar-size: 1 1;
 }
 
-#group-picker-box, #profile-picker-box {
+#group-picker-box, #profile-picker-box, #snippet-picker-box {
     width: 44;
+}
+
+#snippet-edit-box {
+    width: 64;
 }
 
 #profile-edit-box, #unlock-box {
@@ -247,6 +252,13 @@ ConfirmResetScreen {
     color: $text-muted;
     text-wrap: nowrap;
     text-overflow: ellipsis;
+}
+#status-bar {
+    background: $panel;
+}
+SnippetBar Button {
+    min-width: 0;
+    margin: 0 0 0 1;
 }
 #action-menu-box { padding: 0; }
 #action-options { height: auto; border: none; padding: 0; }

@@ -40,6 +40,9 @@ async def test_main_screen_lists_hosts_from_both_sources(tmp_path):
     (inc / "production.conf").write_text("Host srv1 srv2\n    User jorn\n")
 
     class FakeVault:
+        def snippets(self) -> list:
+            return []
+
         def get(self, alias):
             return None
 
@@ -72,6 +75,9 @@ async def test_main_screen_starts_with_host_tree_focused(tmp_path):
     (inc / "production.conf").write_text("Host srv1\n")
 
     class FakeVault:
+        def snippets(self) -> list:
+            return []
+
         def get(self, alias):
             return None
 
@@ -100,6 +106,9 @@ async def test_refresh_hosts_picks_up_a_group_file_added_on_disk(tmp_path):
     cfg.write_text(f"Include {inc}/*\n\nHost bastion\n")
 
     class FakeVault:
+        def snippets(self) -> list:
+            return []
+
         def get(self, alias):
             return None
 

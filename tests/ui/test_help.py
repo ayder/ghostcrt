@@ -11,6 +11,9 @@ def test_help_uses_readable_control_key_syntax():
     assert "ctrl+w" in shortcuts
     assert "ctrl+q" in shortcuts
     assert "ctrl+o" in shortcuts
+    assert "hide" in shortcuts["ctrl+t"].lower()
+    assert "snippet" in shortcuts["ctrl+n"].lower()
+    assert "Vault menu" in shortcuts
     assert all(not key.startswith("^") for key in shortcuts)
 
 

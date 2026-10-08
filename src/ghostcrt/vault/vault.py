@@ -10,10 +10,16 @@ from argon2.exceptions import HashingError
 from cryptography.exceptions import InvalidTag
 
 from ghostcrt.vault import crypto
+from ghostcrt.vault.snippets import (
+    SLOTS,
+    Snippet,
+    normalize_snippet_name,
+    snippet_text_error,
+)
 
 MAGIC = b"PSM1"
-VERSION = 2
-SUPPORTED_VERSIONS = frozenset({1, 2})
+VERSION = 3
+SUPPORTED_VERSIONS = frozenset({1, 2, 3})
 HEADER_FMT = ">4sBIIIII"  # magic, version, time, mem, par, hash_len, salt_len
 HEADER_SIZE = struct.calcsize(HEADER_FMT)
 MAX_VAULT_BYTES = 16 * 1024 * 1024
@@ -65,22 +71,42 @@ def _is_str_map(value: object) -> bool:
     )
 
 
-def _decode_payload(payload: object, version: int) -> tuple[dict[str, str], dict[str, str]]:
-    """Split a decrypted payload into (profiles, hosts) for its format version.
+_SLOT_KEYS = frozenset(str(slot) for slot in SLOTS)
+_Payload = tuple[dict[str, str], dict[str, str], dict[int, Snippet]]
+
+
+def _decode_snippets(raw: object) -> dict[int, Snippet]:
+    if not isinstance(raw, dict):
+        raise WrongMasterKey("invalid vault payload")
+    snippets: dict[int, Snippet] = {}
+    for key, entry in raw.items():
+        if key not in _SLOT_KEYS or not isinstance(entry, dict) or set(entry) != {"name", "text"}:
+            raise WrongMasterKey("invalid vault payload")
+        if not isinstance(entry["name"], str) or not isinstance(entry["text"], str):
+            raise WrongMasterKey("invalid vault payload")
+        snippets[int(key)] = Snippet(int(key), entry["name"], entry["text"])
+    return snippets
+
+
+def _decode_payload(payload: object, version: int) -> _Payload:
+    """Split a decrypted payload into (profiles, hosts, snippets) for its format version.
 
     Format 1 is a flat {alias: password} map; it is migrated in memory, taking
     each alias verbatim as a profile id so no stored password can be lost.
+    Formats 1 and 2 hold no snippets.
     """
     if version == 1:
         if not _is_str_map(payload):
             raise WrongMasterKey("invalid vault payload")
         secrets: dict[str, str] = payload  # type: ignore[assignment]
-        return dict(secrets), {alias: alias for alias in secrets}
-    if not isinstance(payload, dict) or set(payload) != {"profiles", "hosts"}:
+        return dict(secrets), {alias: alias for alias in secrets}, {}
+    keys = {"profiles", "hosts"} if version == 2 else {"profiles", "hosts", "snippets"}
+    if not isinstance(payload, dict) or set(payload) != keys:
         raise WrongMasterKey("invalid vault payload")
     if not _is_str_map(payload["profiles"]) or not _is_str_map(payload["hosts"]):
         raise WrongMasterKey("invalid vault payload")
-    return dict(payload["profiles"]), dict(payload["hosts"])
+    snippets = _decode_snippets(payload["snippets"]) if version == 3 else {}
+    return dict(payload["profiles"]), dict(payload["hosts"]), snippets
 
 
 class Vault:
@@ -96,6 +122,7 @@ class Vault:
         memory_cost: int,
         parallelism: int,
         hash_len: int,
+        snippets: dict[int, Snippet] | None = None,
     ) -> None:
         self.path = path
         self._key = key
@@ -106,6 +133,7 @@ class Vault:
         self._memory_cost = memory_cost
         self._parallelism = parallelism
         self._hash_len = hash_len
+        self._snippets = dict(snippets or {})
 
     def __repr__(self) -> str:
         return f"Vault(path={self.path!r}, aliases={self.aliases()!r})"
@@ -149,7 +177,7 @@ class Vault:
             )
             if magic != MAGIC or version not in SUPPORTED_VERSIONS:
                 raise WrongMasterKey("unsupported vault format")
-            # Both supported versions have only ever written this parameter set.
+            # Every supported version has only ever written this parameter set.
             # Reject headers requesting different work before calling the
             # unauthenticated KDF.
             if (time_cost, memory_cost, parallelism, hash_len, salt_len) != (
@@ -178,7 +206,9 @@ class Vault:
                 plaintext = crypto.decrypt(key, blob)
             except (InvalidTag, ValueError) as exc:
                 raise WrongMasterKey("wrong master key or corrupt vault") from exc
-            profiles, hosts = _decode_payload(json.loads(plaintext.decode("utf-8")), version)
+            profiles, hosts, snippets = _decode_payload(
+                json.loads(plaintext.decode("utf-8")), version
+            )
             return cls(
                 path,
                 key,
@@ -189,6 +219,7 @@ class Vault:
                 memory_cost=memory_cost,
                 parallelism=parallelism,
                 hash_len=hash_len,
+                snippets=snippets,
             )
         except WrongMasterKey:
             raise
@@ -224,6 +255,29 @@ class Vault:
             return None
         return self._profiles.get(profile_id)
 
+    def snippets(self) -> list[Snippet]:
+        return [self._snippets[slot] for slot in sorted(self._snippets)]
+
+    def get_snippet(self, slot: int) -> Snippet | None:
+        return self._snippets.get(slot)
+
+    def update_snippet(self, slot: int, name: str, text: str | None) -> None:
+        """Store a snippet in a slot, or delete it when `text` is None, then persist."""
+        if not isinstance(slot, int) or slot not in SLOTS:
+            raise VaultInputError("Invalid snippet slot.")
+        previous = self._snapshot()
+        if text is None:
+            self._snippets.pop(slot, None)
+        else:
+            stored_name = normalize_snippet_name(name)
+            if stored_name is None:
+                raise VaultInputError("Invalid snippet name.")
+            error = snippet_text_error(text)
+            if error is not None:
+                raise VaultInputError(error)
+            self._snippets[slot] = Snippet(slot, stored_name, text)
+        self._persist(previous)
+
     def update_profile(self, profile_id: str, password: str | None) -> None:
         """Create, overwrite or delete a profile, then persist.
 
@@ -231,7 +285,7 @@ class Vault:
         profile -- including one migrated verbatim from a format-1 vault -- can
         always be overwritten and deleted.
         """
-        previous = (self._profiles.copy(), self._hosts.copy())
+        previous = self._snapshot()
         if password is None:
             self._profiles.pop(profile_id, None)
             self._hosts = {
@@ -253,22 +307,32 @@ class Vault:
         """Point an alias at a profile, or remove its assignment, then persist."""
         if profile_id is not None and profile_id not in self._profiles:
             raise VaultInputError("Unknown profile.")
-        previous = (self._profiles.copy(), self._hosts.copy())
+        previous = self._snapshot()
         if profile_id is None:
             self._hosts.pop(alias, None)
         else:
             self._hosts[alias] = profile_id
         self._persist(previous)
 
-    def _persist(self, previous: tuple[dict[str, str], dict[str, str]]) -> None:
+    def _snapshot(self) -> tuple[dict[str, str], dict[str, str], dict[int, Snippet]]:
+        return self._profiles.copy(), self._hosts.copy(), self._snippets.copy()
+
+    def _persist(self, previous: tuple[dict[str, str], dict[str, str], dict[int, Snippet]]) -> None:
         try:
             self.save()
         except VaultError:
-            self._profiles, self._hosts = previous
+            self._profiles, self._hosts, self._snippets = previous
             raise
 
     def save(self) -> None:
-        payload = {"profiles": self._profiles, "hosts": self._hosts}
+        payload = {
+            "profiles": self._profiles,
+            "hosts": self._hosts,
+            "snippets": {
+                str(slot): {"name": snippet.name, "text": snippet.text}
+                for slot, snippet in self._snippets.items()
+            },
+        }
         plaintext = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         blob = crypto.encrypt(self._key, plaintext)
         header = struct.pack(

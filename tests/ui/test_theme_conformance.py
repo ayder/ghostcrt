@@ -35,6 +35,8 @@ from ghostcrt.ui.screens.include_setup import IncludeSetupModal
 from ghostcrt.ui.screens.main import MainScreen
 from ghostcrt.ui.screens.profile_edit import ProfileEditModal
 from ghostcrt.ui.screens.profile_picker import ProfilePickerScreen
+from ghostcrt.ui.screens.snippet_edit import SnippetEditModal
+from ghostcrt.ui.screens.snippet_picker import SnippetPickerScreen
 from ghostcrt.ui.screens.unlock import UnlockScreen
 from ghostcrt.ui.widgets.host_list import HostList
 
@@ -46,6 +48,9 @@ ANSI_BRIGHT_BLACK = 8
 
 
 class FakeVault:
+    def snippets(self) -> list:
+        return []
+
     def get(self, alias: str) -> None:
         return None
 
@@ -80,6 +85,8 @@ OVERLAYS = [
     ("#unlock-box", lambda: UnlockScreen(_tmp() / "vault.json")),
     ("#profile-edit-box", lambda: ProfileEditModal(profiles=[])),
     ("#profile-picker-box", lambda: ProfilePickerScreen("Assign", ["ops"], allow_none=True)),
+    ("#snippet-picker-box", lambda: SnippetPickerScreen([])),
+    ("#snippet-edit-box", lambda: SnippetEditModal(1, None)),
 ]
 
 

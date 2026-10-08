@@ -10,6 +10,9 @@ from ghostcrt.ui.screens.main import MainScreen
 
 
 class FakeVault:
+    def snippets(self) -> list:
+        return []
+
     def get(self, alias):
         return None
 

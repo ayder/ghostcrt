@@ -11,7 +11,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import Input, Static
+from textual.widgets import Input, Static, TabbedContent
 
 from ghostcrt.config.include_bootstrap import include_is_configured
 from ghostcrt.config.inventory import READONLY_GROUP, HostInventory
@@ -26,9 +26,12 @@ from ghostcrt.ui.screens.host_edit import HostEditModal, HostEditResult
 from ghostcrt.ui.screens.include_setup import IncludeSetupModal
 from ghostcrt.ui.screens.profile_edit import ProfileEditModal
 from ghostcrt.ui.screens.profile_picker import ProfilePick, ProfilePickerScreen
+from ghostcrt.ui.screens.snippet_edit import SnippetEdit, SnippetEditModal
+from ghostcrt.ui.screens.snippet_picker import SnippetPickerScreen
 from ghostcrt.ui.widgets.host_list import HostList
 from ghostcrt.ui.widgets.menu_bar import MenuBar
 from ghostcrt.ui.widgets.session_tabs import SessionTabs
+from ghostcrt.ui.widgets.snippet_bar import SnippetBar
 from ghostcrt.ui.widgets.terminal import TerminalWidget
 from ghostcrt.vault.vault import Vault, VaultError
 
@@ -37,6 +40,8 @@ ASSIGNMENT_NOT_SAVED = (
     "Host saved; profile assignment was not. Use Vault → Assign profile to selected host… to retry."
 )
 NO_GROUP_CHOSEN = "Host not saved: no group chosen."
+TERMINAL_HINT = "TERMINAL  Ctrl+T Hosts · Ctrl+N Snippet · Ctrl+O Mouse"
+SNIPPET_HINT = "SNIPPET  1–5 Send · Esc Cancel"
 
 
 class MainScreen(Screen):
@@ -48,8 +53,8 @@ class MainScreen(Screen):
         Binding("ctrl+w", "close_session", "Close session", show=False),
         Binding(
             "ctrl+t",
-            "focus_hosts",
-            "Release terminal",
+            "toggle_hosts",
+            "Toggle hosts",
             key_display="Ctrl+T",
             show=False,
             priority=True,
@@ -59,6 +64,12 @@ class MainScreen(Screen):
     DEFAULT_CSS = """
     #main-body {
         height: 1fr;
+    }
+    #status-bar {
+        height: 1;
+    }
+    #context-status {
+        width: 1fr;
     }
     MainScreen.compact #main-body {
         layout: vertical;
@@ -83,11 +94,14 @@ class MainScreen(Screen):
         yield MenuBar()
         with Horizontal(id="main-body"):
             yield HostList(id="host-list")
-            yield SessionTabs(id="session-tabs")
-        yield Static("ghostcrt · Ctrl+H Help", id="context-status", markup=False)
+            yield SessionTabs(id="session-tabs", snippet_text=self._snippet_text)
+        with Horizontal(id="status-bar"):
+            yield Static("ghostcrt · Ctrl+H Help", id="context-status", markup=False)
+            yield SnippetBar(id="snippet-bar")
 
     def on_mount(self) -> None:
         self.refresh_hosts()
+        self.refresh_snippets()
         self.set_class(self.size.width < 90, "compact")
         self.action_focus_hosts()
         self._offer_include_setup()
@@ -107,6 +121,7 @@ class MainScreen(Screen):
 
     def on_resize(self, event: events.Resize) -> None:
         self.set_class(event.size.width < 90, "compact")
+        self.refresh_snippets()
 
     def refresh_hosts(self) -> None:
         try:
@@ -127,24 +142,85 @@ class MainScreen(Screen):
     def on_descendant_focus(self, event: events.DescendantFocus) -> None:
         if event.widget is not self.app.focused:
             return
-        if isinstance(event.widget, TerminalWidget):
+        in_terminal = isinstance(event.widget, TerminalWidget)
+        self.query_one(SnippetBar).set_class(in_terminal, "-active")
+        if in_terminal:
             self.remove_class("hosts-open")
-            hint = "TERMINAL  Ctrl+T Hosts · Ctrl+O Mouse"
+            hint = TERMINAL_HINT
         elif isinstance(event.widget, Input):
             hint = "FILTER  Down Hosts · Esc Terminal · F10 Menu"
         elif event.widget.id == "host-tree":
-            hint = "HOSTS  ↑↓ Navigate · Enter Connect · / Filter · F10 Menu · Esc Terminal"
+            hint = (
+                "HOSTS  ↑↓ Navigate · Enter Connect · / Filter · Ctrl+T Hide · F10 Menu"
+                " · Esc Terminal"
+            )
         else:
             hint = "MENU  Enter Open · Tab Next · Esc Terminal"
+        self._set_hint(hint)
+
+    def _set_hint(self, hint: str) -> None:
         self.query_one("#context-status", Static).update(f"ghostcrt · Ctrl+H Help · {hint}")
 
     def action_focus_search(self) -> None:
+        self.remove_class("hosts-hidden")
         self.add_class("hosts-open")
         self.query_one(HostList).focus_filter()
 
     def action_focus_hosts(self) -> None:
+        self.remove_class("hosts-hidden")
         self.add_class("hosts-open")
         self.query_one(HostList).focus_list()
+
+    def action_toggle_hosts(self) -> None:
+        if isinstance(self.app.focused, TerminalWidget):
+            self.action_focus_hosts()
+        elif self.query_one(SessionTabs).active_terminal is not None:
+            # Hidden hosts give the terminal the full width until Ctrl+T or
+            # Ctrl+N brings them back; Esc keeps them beside the terminal.
+            self.add_class("hosts-hidden")
+            self.action_focus_terminal()
+
+    @on(TabbedContent.Cleared)
+    def on_sessions_cleared(self) -> None:
+        if self.has_class("hosts-hidden"):
+            self.action_focus_hosts()
+
+    def refresh_snippets(self) -> None:
+        self.query_one(SnippetBar).show_snippets(self.vault.snippets())
+
+    def _snippet_text(self, slot: int) -> str | None:
+        snippet = self.vault.get_snippet(slot)
+        return None if snippet is None else snippet.text
+
+    @on(TerminalWidget.SnippetArmed)
+    def handle_snippet_armed(self) -> None:
+        self._set_hint(SNIPPET_HINT)
+
+    @on(TerminalWidget.SnippetChosen)
+    def handle_snippet_key(self, message: TerminalWidget.SnippetChosen) -> None:
+        # A cancel caused by focus moving away is followed by DescendantFocus,
+        # which sets the hint for the new widget; only restore it here.
+        if isinstance(self.app.focused, TerminalWidget):
+            self._set_hint(TERMINAL_HINT)
+        self._report_snippet(message.slot, message.outcome)
+
+    @on(SnippetBar.Chosen)
+    async def handle_snippet_click(self, message: SnippetBar.Chosen) -> None:
+        terminal = self.query_one(SessionTabs).active_terminal
+        if terminal is None:
+            self._report_snippet(message.slot, "not-connected")
+            return
+        # type_snippet also disarms a pending Ctrl+N, so a later digit is typed.
+        outcome = await terminal.type_snippet(message.slot)
+        if self.app.focused is terminal:
+            self._set_hint(TERMINAL_HINT)
+        self._report_snippet(message.slot, outcome)
+
+    def _report_snippet(self, slot: int | None, outcome: str) -> None:
+        if outcome == "empty":
+            self.notify(f"Snippet {slot} is empty.", severity="warning")
+        elif outcome == "not-connected":
+            self.notify("Session is not connected.", severity="warning")
 
     @on(TerminalWidget.ReleaseFocus)
     def on_terminal_release_focus(self) -> None:
@@ -238,6 +314,8 @@ class MainScreen(Screen):
                 self._profile_delete()
             elif action == "assign":
                 self._profile_assign()
+            elif action == "snippets":
+                self._snippets_edit()
 
         self.app.push_screen(
             ActionMenuScreen(
@@ -246,6 +324,7 @@ class MainScreen(Screen):
                     ("profile", "Create / update profile…"),
                     ("delete-profile", "Delete profile…"),
                     ("assign", "Assign profile to selected host…"),
+                    ("snippets", "Snippets…"),
                 ],
                 anchor_id="menu-vault",
                 disabled={"assign"} if self._selected_host() is None else set(),
@@ -473,6 +552,25 @@ class MainScreen(Screen):
                 self.notify(str(exc), severity="error")
 
         self.app.push_screen(ConfirmCloseScreen(details, confirm_label="OK"), confirmed)
+
+    def _snippets_edit(self) -> None:
+        def edited(result: SnippetEdit | None) -> None:
+            if result is None:
+                return
+            try:
+                self.vault.update_snippet(result.slot, result.name, result.text)
+            except VaultError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            verb = "Deleted" if result.text is None else "Saved"
+            self.notify(f"{verb} snippet {result.slot}")
+            self.refresh_snippets()
+
+        def picked(slot: int | None) -> None:
+            if slot is not None:
+                self.app.push_screen(SnippetEditModal(slot, self.vault.get_snippet(slot)), edited)
+
+        self.app.push_screen(SnippetPickerScreen(self.vault.snippets()), picked)
 
     def _profile_create(self) -> None:
         def handle(result: tuple[str, str] | None) -> None:

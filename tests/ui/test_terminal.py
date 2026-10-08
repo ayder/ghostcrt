@@ -23,6 +23,9 @@ REMOTE_ENABLES_MOUSE = "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h"
 
 
 class FakeVault:
+    def snippets(self) -> list:
+        return []
+
     def get(self, alias: str) -> None:
         return None
 

@@ -17,6 +17,11 @@ from ghostcrt.ui.widgets.host_list import HostList, HostNode, HostTree
 from ghostcrt.ui.widgets.session_tabs import SessionTabs
 
 
+class NoSnippetsVault:
+    def snippets(self) -> list:
+        return []
+
+
 class Preview(App):
     CSS_PATH = str(Path(__file__).parents[2] / 'src/ghostcrt/ui/compact.tcss')
 
@@ -106,7 +111,7 @@ def main_app(tmp_path):
     config.write_text(f'Include {includes}/*\n')
     class MainPreview(Preview):
         def on_mount(self):
-            self.main_screen = MainScreen(None, HostInventory(config, includes))
+            self.main_screen = MainScreen(NoSnippetsVault(), HostInventory(config, includes))
             self.push_screen(self.main_screen)
 
     return MainPreview()
@@ -173,6 +178,113 @@ async def test_drawer_and_terminal_dimensions(tmp_path, size):
         assert screen.query_one(Tree).has_focus
         await pilot.press('escape')
         assert terminal.has_focus
+
+
+async def open_preview_session(pilot, screen):
+    tabs = screen.query_one(SessionTabs)
+    pane_id = await tabs.add_session(SshSession(alias='preview'))
+    await pilot.pause()
+    return tabs, pane_id
+
+
+async def test_ctrl_t_hides_and_shows_host_list(tmp_path):
+    app = main_app(tmp_path)
+    async with app.run_test(size=(120, 30)) as pilot:
+        screen = app.main_screen
+        hosts = screen.query_one(HostList)
+        tree = screen.query_one(Tree)
+        tabs, _ = await open_preview_session(pilot, screen)
+        terminal = tabs.active_terminal
+        beside_hosts = terminal.size.width
+
+        await pilot.press('ctrl+t')
+        await pilot.pause()
+        assert tree.has_focus
+
+        await pilot.press('ctrl+t')
+        await pilot.pause()
+        assert not hosts.display
+        assert terminal.has_focus
+        assert terminal.size.width > beside_hosts
+
+        await pilot.press('ctrl+t')
+        await pilot.pause()
+        assert hosts.display
+        assert tree.has_focus
+        assert terminal.size.width == beside_hosts
+
+
+async def test_ctrl_t_from_host_filter_hides_host_list(tmp_path):
+    app = main_app(tmp_path)
+    async with app.run_test(size=(120, 30)) as pilot:
+        screen = app.main_screen
+        tabs, _ = await open_preview_session(pilot, screen)
+        screen.action_focus_search()
+        await pilot.pause()
+        assert screen.query_one(HostList).query_one(Input).has_focus
+
+        await pilot.press('ctrl+t')
+        await pilot.pause()
+        assert not screen.query_one(HostList).display
+        assert tabs.active_terminal.has_focus
+
+
+async def test_escape_from_hosts_keeps_host_list_visible(tmp_path):
+    app = main_app(tmp_path)
+    async with app.run_test(size=(120, 30)) as pilot:
+        screen = app.main_screen
+        tabs, _ = await open_preview_session(pilot, screen)
+        await pilot.press('ctrl+t')
+        await pilot.pause()
+
+        await pilot.press('escape')
+        await pilot.pause()
+        assert tabs.active_terminal.has_focus
+        assert screen.query_one(HostList).display
+
+
+async def test_ctrl_t_without_session_keeps_host_list(tmp_path):
+    app = main_app(tmp_path)
+    async with app.run_test(size=(120, 30)) as pilot:
+        screen = app.main_screen
+        tree = screen.query_one(Tree)
+        assert tree.has_focus
+
+        await pilot.press('ctrl+t')
+        await pilot.pause()
+        assert screen.query_one(HostList).display
+        assert tree.has_focus
+
+
+async def test_closing_last_session_restores_hidden_host_list(tmp_path):
+    app = main_app(tmp_path)
+    async with app.run_test(size=(120, 30)) as pilot:
+        screen = app.main_screen
+        tabs, pane_id = await open_preview_session(pilot, screen)
+        await pilot.press('ctrl+t', 'ctrl+t')
+        await pilot.pause()
+        assert not screen.query_one(HostList).display
+
+        await tabs.close_session(pane_id)
+        await pilot.pause()
+        assert screen.query_one(HostList).display
+        assert screen.query_one(Tree).has_focus
+
+
+async def test_ctrl_t_closes_narrow_host_drawer(tmp_path):
+    app = main_app(tmp_path)
+    async with app.run_test(size=(80, 24)) as pilot:
+        screen = app.main_screen
+        hosts = screen.query_one(HostList)
+        tabs, _ = await open_preview_session(pilot, screen)
+        await pilot.press('ctrl+t')
+        await pilot.pause()
+        assert hosts.display
+
+        await pilot.press('ctrl+t')
+        await pilot.pause()
+        assert not hosts.display
+        assert tabs.active_terminal.has_focus
 
 
 async def test_filter_preserves_host_without_connecting(tmp_path):
