@@ -47,12 +47,18 @@ class SnippetBar(Horizontal):
 
     def show_snippets(self, snippets: list[Snippet]) -> None:
         names = {snippet.slot: snippet.name for snippet in snippets}
+        # A button is its label, a column of padding each side and a one-column
+        # gap. Past half the screen, show slot numbers only, so the hint (which
+        # tells whether Ctrl+N is armed) and every button stay on screen.
+        full_width = sum(len(f"{slot} {name}") + 3 for slot, name in names.items())
+        numbers_only = full_width > self.app.size.width // 2
         for button in self.query(SnippetButton):
             name = names.get(button.slot)
             button.display = name is not None
             if name is not None:
+                label = str(button.slot) if numbers_only else f"{button.slot} {name}"
                 # Content, not str: a str label is parsed as markup.
-                button.label = Content(f"{button.slot} {name}")
+                button.label = Content(label)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         event.stop()

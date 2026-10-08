@@ -256,6 +256,10 @@ ConfirmResetScreen {
 #status-bar {
     background: $panel;
 }
+SnippetBar Button {
+    min-width: 0;
+    margin: 0 0 0 1;
+}
 #action-menu-box { padding: 0; }
 #action-options { height: auto; border: none; padding: 0; }
 OptionList > .option-list--option { padding: 0 1; }

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from typing import ClassVar
 
 from ghostty_textual import (
@@ -117,12 +117,20 @@ class TerminalWidget(TerminalView):
     class ReleaseFocus(Message):
         """Request that the screen move focus outside the SSH terminal."""
 
-    class SnippetChosen(Message):
-        """The key after Ctrl+N: a snippet slot 1-5, or None when cancelled."""
+    class SnippetArmed(Message):
+        """Ctrl+N was pressed here; the next key picks a snippet slot."""
 
-        def __init__(self, slot: int | None) -> None:
+    class SnippetChosen(Message):
+        """The key after Ctrl+N was handled.
+
+        `slot` is the chosen slot, or None when cancelled. `outcome` is
+        "typed", "empty", "not-connected" or "cancelled".
+        """
+
+        def __init__(self, slot: int | None, outcome: str) -> None:
             super().__init__()
             self.slot = slot
+            self.outcome = outcome
 
     class ViewportChanged(Message):
         """Keep the pane's scrollbar in sync with the emulator."""
@@ -132,8 +140,15 @@ class TerminalWidget(TerminalView):
             self.viewport = viewport
             self.rows = rows
 
-    def __init__(self, session: SshSession, **kwargs) -> None:
+    def __init__(
+        self,
+        session: SshSession,
+        *,
+        snippet_text: Callable[[int], str | None] | None = None,
+        **kwargs,
+    ) -> None:
         self.session = session
+        self.snippet_text = snippet_text
         self._frame_timer: Timer | None = None
         self.snippet_armed = False
         super().__init__(
@@ -201,19 +216,35 @@ class TerminalWidget(TerminalView):
 
     async def on_key(self, event: events.Key) -> None:
         # Textual runs TerminalView.on_key after this handler unless the default
-        # is prevented, so do not call super(): unarmed keys reach it anyway.
-        if not self.snippet_armed:
+        # is prevented, so do not call super(): other keys reach it anyway.
+        # Ctrl+N and the slot key are handled here, not by screen bindings, so
+        # keys that arrive in the same read wait their turn behind the snippet.
+        if not self.snippet_armed and event.key != "ctrl+n":
             return
         event.stop()
         event.prevent_default()
-        self.snippet_armed = False
-        slot = int(event.key) if event.key in _SNIPPET_KEYS else None
-        self.post_message(self.SnippetChosen(slot))
+        if not self.snippet_armed:
+            self.arm_snippet()
+            self.post_message(self.SnippetArmed())
+        elif event.key in _SNIPPET_KEYS:
+            slot = int(event.key)
+            self.post_message(self.SnippetChosen(slot, await self.type_snippet(slot)))
+        else:
+            self.snippet_armed = False
+            self.post_message(self.SnippetChosen(None, "cancelled"))
 
     def on_blur(self) -> None:
         if self.snippet_armed:
             self.snippet_armed = False
-            self.post_message(self.SnippetChosen(None))
+            self.post_message(self.SnippetChosen(None, "cancelled"))
+
+    async def type_snippet(self, slot: int) -> str:
+        """Disarm and type a stored snippet: "typed", "empty" or "not-connected"."""
+        self.snippet_armed = False
+        text = self.snippet_text(slot) if self.snippet_text is not None else None
+        if text is None:
+            return "empty"
+        return "typed" if await self.type_text(text) else "not-connected"
 
     async def type_text(self, text: str) -> bool:
         """Type snippet text as keystrokes; False when the session cannot take input."""

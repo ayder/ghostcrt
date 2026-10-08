@@ -49,7 +49,7 @@ class MainScreen(Screen):
         Binding("f10", "focus_menu", "Menu", show=False),
         Binding("escape", "focus_terminal", "Terminal", show=False),
         Binding("slash", "focus_search", "Search", show=False),
-        Binding("ctrl+n", "snippet_or_hosts", "Snippet / Hosts", show=False),
+        Binding("ctrl+n", "focus_hosts", "Hosts", show=False),
         Binding("ctrl+w", "close_session", "Close session", show=False),
         Binding(
             "ctrl+t",
@@ -94,7 +94,7 @@ class MainScreen(Screen):
         yield MenuBar()
         with Horizontal(id="main-body"):
             yield HostList(id="host-list")
-            yield SessionTabs(id="session-tabs")
+            yield SessionTabs(id="session-tabs", snippet_text=self._snippet_text)
         with Horizontal(id="status-bar"):
             yield Static("ghostcrt · Ctrl+H Help", id="context-status", markup=False)
             yield SnippetBar(id="snippet-bar")
@@ -121,6 +121,7 @@ class MainScreen(Screen):
 
     def on_resize(self, event: events.Resize) -> None:
         self.set_class(event.size.width < 90, "compact")
+        self.refresh_snippets()
 
     def refresh_hosts(self) -> None:
         try:
@@ -187,34 +188,38 @@ class MainScreen(Screen):
     def refresh_snippets(self) -> None:
         self.query_one(SnippetBar).show_snippets(self.vault.snippets())
 
-    def action_snippet_or_hosts(self) -> None:
-        focused = self.app.focused
-        if isinstance(focused, TerminalWidget):
-            focused.arm_snippet()
-            self._set_hint(SNIPPET_HINT)
-        else:
-            self.action_focus_hosts()
+    def _snippet_text(self, slot: int) -> str | None:
+        snippet = self.vault.get_snippet(slot)
+        return None if snippet is None else snippet.text
+
+    @on(TerminalWidget.SnippetArmed)
+    def handle_snippet_armed(self) -> None:
+        self._set_hint(SNIPPET_HINT)
 
     @on(TerminalWidget.SnippetChosen)
-    async def handle_snippet_key(self, message: TerminalWidget.SnippetChosen) -> None:
+    def handle_snippet_key(self, message: TerminalWidget.SnippetChosen) -> None:
         # A cancel caused by focus moving away is followed by DescendantFocus,
         # which sets the hint for the new widget; only restore it here.
         if isinstance(self.app.focused, TerminalWidget):
             self._set_hint(TERMINAL_HINT)
-        if message.slot is not None:
-            await self._type_snippet(message.slot)
+        self._report_snippet(message.slot, message.outcome)
 
     @on(SnippetBar.Chosen)
     async def handle_snippet_click(self, message: SnippetBar.Chosen) -> None:
-        await self._type_snippet(message.slot)
-
-    async def _type_snippet(self, slot: int) -> None:
-        snippet = self.vault.get_snippet(slot)
-        if snippet is None:
-            self.notify(f"Snippet {slot} is empty.", severity="warning")
-            return
         terminal = self.query_one(SessionTabs).active_terminal
-        if terminal is None or not await terminal.type_text(snippet.text):
+        if terminal is None:
+            self._report_snippet(message.slot, "not-connected")
+            return
+        # type_snippet also disarms a pending Ctrl+N, so a later digit is typed.
+        outcome = await terminal.type_snippet(message.slot)
+        if self.app.focused is terminal:
+            self._set_hint(TERMINAL_HINT)
+        self._report_snippet(message.slot, outcome)
+
+    def _report_snippet(self, slot: int | None, outcome: str) -> None:
+        if outcome == "empty":
+            self.notify(f"Snippet {slot} is empty.", severity="warning")
+        elif outcome == "not-connected":
             self.notify("Session is not connected.", severity="warning")
 
     @on(TerminalWidget.ReleaseFocus)
