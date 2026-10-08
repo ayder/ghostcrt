@@ -27,6 +27,21 @@ class TestReadme:
         assert "Choose a group" not in text
         assert "highlighted group" not in text
 
+    def test_documents_snippets(self):
+        text = (Path(__file__).resolve().parents[1] / "README.md").read_text()
+
+        start = re.search(r"^## Snippets$", text, re.MULTILINE)
+        assert start is not None
+        later = [
+            m.start() for m in re.finditer(r"^## ", text, re.MULTILINE) if m.start() > start.start()
+        ]
+        section = text[start.start() : min(later) if later else len(text)]
+
+        assert "Ctrl+N" in section
+        assert "\\n" in section
+        assert "vault" in section.lower()
+        assert len(section.splitlines()) <= 12
+
 
 class TestChangelog:
     def test_020_entry_names_the_group_picker_fix(self):
