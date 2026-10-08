@@ -21,7 +21,9 @@ from textual.message import Message
 from textual.theme import Theme
 from textual.timer import Timer
 
+from ghostcrt.models import SessionState
 from ghostcrt.ssh.session import SshSession
+from ghostcrt.vault.snippets import snippet_keystrokes
 
 # Keys owned by application/screen bindings. TerminalView leaves reserved key
 # events untouched so Textual can route them to the appropriate binding.
@@ -36,6 +38,9 @@ _APP_KEYS = frozenset(
         "ctrl+t",
     }
 )
+
+# Keys that pick a snippet slot after Ctrl+N.
+_SNIPPET_KEYS = frozenset("12345")
 
 
 def _triplet(rgb: ColorTriplet) -> tuple[int, int, int]:
@@ -112,6 +117,13 @@ class TerminalWidget(TerminalView):
     class ReleaseFocus(Message):
         """Request that the screen move focus outside the SSH terminal."""
 
+    class SnippetChosen(Message):
+        """The key after Ctrl+N: a snippet slot 1-5, or None when cancelled."""
+
+        def __init__(self, slot: int | None) -> None:
+            super().__init__()
+            self.slot = slot
+
     class ViewportChanged(Message):
         """Keep the pane's scrollbar in sync with the emulator."""
 
@@ -123,6 +135,7 @@ class TerminalWidget(TerminalView):
     def __init__(self, session: SshSession, **kwargs) -> None:
         self.session = session
         self._frame_timer: Timer | None = None
+        self.snippet_armed = False
         super().__init__(
             send=self._send_session,
             resize_transport=self._resize_session,
@@ -181,6 +194,37 @@ class TerminalWidget(TerminalView):
 
     def _send_session(self, data: bytes) -> Awaitable[None]:
         return self.session.send(data)
+
+    def arm_snippet(self) -> None:
+        """Take the next key as a snippet slot instead of sending it."""
+        self.snippet_armed = True
+
+    async def on_key(self, event: events.Key) -> None:
+        # Textual runs TerminalView.on_key after this handler unless the default
+        # is prevented, so do not call super(): unarmed keys reach it anyway.
+        if not self.snippet_armed:
+            return
+        event.stop()
+        event.prevent_default()
+        self.snippet_armed = False
+        slot = int(event.key) if event.key in _SNIPPET_KEYS else None
+        self.post_message(self.SnippetChosen(slot))
+
+    def on_blur(self) -> None:
+        if self.snippet_armed:
+            self.snippet_armed = False
+            self.post_message(self.SnippetChosen(None))
+
+    async def type_text(self, text: str) -> bool:
+        """Type snippet text as keystrokes; False when the session cannot take input."""
+        if self.failed or self.session.state != SessionState.CONNECTED:
+            return False
+        try:
+            await self._enqueue(snippet_keystrokes(text))
+        except GhosttyError as exc:
+            self._fail(exc)
+            return False
+        return True
 
     async def on_paste(self, event: events.Paste) -> None:
         event.stop()
