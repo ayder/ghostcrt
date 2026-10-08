@@ -21,8 +21,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from ghostcrt.ui.screens.snippet_edit import SnippetEditModal
-from ghostcrt.ui.screens.snippet_picker import SnippetPickerScreen
 from textual.app import App
 from textual.color import Color
 
@@ -37,6 +35,8 @@ from ghostcrt.ui.screens.include_setup import IncludeSetupModal
 from ghostcrt.ui.screens.main import MainScreen
 from ghostcrt.ui.screens.profile_edit import ProfileEditModal
 from ghostcrt.ui.screens.profile_picker import ProfilePickerScreen
+from ghostcrt.ui.screens.snippet_edit import SnippetEditModal
+from ghostcrt.ui.screens.snippet_picker import SnippetPickerScreen
 from ghostcrt.ui.screens.unlock import UnlockScreen
 from ghostcrt.ui.widgets.host_list import HostList
 
