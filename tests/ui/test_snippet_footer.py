@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import Path
 
+from textual import events
 from textual.app import App
 from textual.widgets import Input, Static, Tree
 
@@ -218,3 +219,65 @@ async def test_refresh_snippets_updates_the_bar(tmp_path):
         await settle(pilot)
 
         assert visible_labels(screen) == ["3 logs", "5 psql"]
+
+
+async def test_clicking_a_button_while_armed_disarms_the_terminal(tmp_path):
+    app, _vault = snippet_app(tmp_path)
+    async with app.run_test(size=(120, 30)) as pilot:
+        screen = app.main_screen
+        tabs, _pane, sent = await open_session(pilot)
+        await pilot.press("ctrl+n")
+        await settle(pilot)
+
+        await pilot.click("#snippet-1")
+        await settle(pilot)
+        await pilot.press("3")
+        await settle(pilot)
+
+        assert b"".join(sent) == b"synthetic-pw\r3"
+        assert not tabs.active_terminal.snippet_armed
+        assert "TERMINAL" in hint(screen)
+
+
+async def test_batched_ctrl_n_and_digit_types_the_snippet(tmp_path):
+    # One stdin read can carry several keys; the driver posts them back to back.
+    app, _vault = snippet_app(tmp_path)
+    async with app.run_test(size=(120, 30)) as pilot:
+        tabs, _pane, sent = await open_session(pilot)
+
+        app.post_message(events.Key("ctrl+n", None))
+        app.post_message(events.Key("3", "3"))
+        await settle(pilot)
+
+        assert b"".join(sent) == b"tail -f x\r"
+        assert not tabs.active_terminal.snippet_armed
+
+
+async def test_batched_slot_key_and_next_key_keep_their_order(tmp_path):
+    app, _vault = snippet_app(tmp_path)
+    async with app.run_test(size=(120, 30)) as pilot:
+        _tabs, _pane, sent = await open_session(pilot)
+        await pilot.press("ctrl+n")
+        await settle(pilot)
+
+        app.post_message(events.Key("3", "3"))
+        app.post_message(events.Key("x", "x"))
+        await settle(pilot)
+
+        assert b"".join(sent) == b"tail -f x\rx"
+
+
+async def test_long_names_keep_the_hint_and_every_button_on_screen(tmp_path):
+    long_names = [(slot, f"{slot}" * 16, "x") for slot in range(1, 6)]
+    app, _vault = snippet_app(tmp_path, snippets=long_names)
+    async with app.run_test(size=(80, 24)) as pilot:
+        screen = app.main_screen
+        await open_session(pilot)
+        await pilot.press("ctrl+n")
+        await settle(pilot)
+
+        status = screen.query_one("#context-status", Static)
+        assert status.region.width >= len("ghostcrt · Ctrl+H Help · SNIPPET")
+        buttons = [b for b in screen.query_one(SnippetBar).query(SnippetButton) if b.display]
+        assert len(buttons) == 5
+        assert all(0 < b.region.width and b.region.right <= 80 for b in buttons)
