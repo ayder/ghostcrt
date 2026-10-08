@@ -3,7 +3,7 @@
 Modern terminal UI for managing multiple SSH sessions with an encrypted
 password vault. Inspired by SecureCRT®.
 
-Licensed under [GNU GPLv3](LICENSE) (GPL-3.0-only).
+Licensed under [GNU GPLv3](https://github.com/ayder/ghostcrt/blob/main/LICENSE) (GPL-3.0-only).
 
 SecureCRT is a registered trademark of VanDyke Software, Inc. ghostcrt is not affiliated with or
 endorsed by VanDyke Software.
@@ -43,7 +43,7 @@ macOS: `brew install hudochenkov/sshpass/sshpass` (or your preferred tap)
 ## Install
 
 ```bash
-uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.3.0/ghostcrt-0.3.0-py3-none-any.whl
+uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.4.0/ghostcrt-0.4.0-py3-none-any.whl
 ghostcrt
 ```
 
@@ -198,8 +198,16 @@ while the snippet is open in its editor.
 
 ```bash
 uv run pytest
-uv run ruff check src tests
+uv run --no-project python scripts/checks.py         # every CI check, this OS, every Python
+uv run --no-project python scripts/checks.py --all   # plus the Ubuntu jobs in Docker
 ```
+
+CI and the local gate run the same list of checks, kept in `pyproject.toml` under
+`[tool.ghostcrt.checks]`: locked sync, Ruff (uncached), tests, a dependency audit on
+Ubuntu/Python 3.12, wheel and source builds, `twine check`, and an installed-wheel smoke
+test. The runner uses the uv version pinned there, and `tests/test_ci_drift.py` fails if
+the workflows stop matching it. `--all` runs the committed tree (`HEAD`) in an
+`ubuntu:24.04` container as a non-root user, so Docker must be running.
 
 Host-key integration tests use an optional local Docker SSH server and isolated
 temporary `known_hosts` files. With `sshpass` installed:
@@ -222,7 +230,7 @@ It uses OpenSSH's `-F` option, which also bypasses the system-wide SSH config.
 The setup check requires a leading, unconditional Include covering all group
 files. Existing partial or conditional includes do not satisfy this check.
 
-GitHub CI runs tests and builds on Linux and macOS.
+GitHub CI runs the checks above on Ubuntu 24.04 and macOS 14 with Python 3.12 and 3.14.
 
 ## Releases
 
