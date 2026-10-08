@@ -9,6 +9,7 @@ class TestReadme:
 
         assert "Password profiles" in text
         assert "format 2" in text
+        assert "format 3" in text
 
         start_match = re.search(r"^## Vault profiles$", text, re.MULTILINE)
         assert start_match is not None
