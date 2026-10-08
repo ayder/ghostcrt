@@ -26,6 +26,8 @@ from ghostcrt.ui.screens.host_edit import HostEditModal, HostEditResult
 from ghostcrt.ui.screens.include_setup import IncludeSetupModal
 from ghostcrt.ui.screens.profile_edit import ProfileEditModal
 from ghostcrt.ui.screens.profile_picker import ProfilePick, ProfilePickerScreen
+from ghostcrt.ui.screens.snippet_edit import SnippetEdit, SnippetEditModal
+from ghostcrt.ui.screens.snippet_picker import SnippetPickerScreen
 from ghostcrt.ui.widgets.host_list import HostList
 from ghostcrt.ui.widgets.menu_bar import MenuBar
 from ghostcrt.ui.widgets.session_tabs import SessionTabs
@@ -307,6 +309,8 @@ class MainScreen(Screen):
                 self._profile_delete()
             elif action == "assign":
                 self._profile_assign()
+            elif action == "snippets":
+                self._snippets_edit()
 
         self.app.push_screen(
             ActionMenuScreen(
@@ -315,6 +319,7 @@ class MainScreen(Screen):
                     ("profile", "Create / update profile…"),
                     ("delete-profile", "Delete profile…"),
                     ("assign", "Assign profile to selected host…"),
+                    ("snippets", "Snippets…"),
                 ],
                 anchor_id="menu-vault",
                 disabled={"assign"} if self._selected_host() is None else set(),
@@ -542,6 +547,25 @@ class MainScreen(Screen):
                 self.notify(str(exc), severity="error")
 
         self.app.push_screen(ConfirmCloseScreen(details, confirm_label="OK"), confirmed)
+
+    def _snippets_edit(self) -> None:
+        def edited(result: SnippetEdit | None) -> None:
+            if result is None:
+                return
+            try:
+                self.vault.update_snippet(result.slot, result.name, result.text)
+            except VaultError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            verb = "Deleted" if result.text is None else "Saved"
+            self.notify(f"{verb} snippet {result.slot}")
+            self.refresh_snippets()
+
+        def picked(slot: int | None) -> None:
+            if slot is not None:
+                self.app.push_screen(SnippetEditModal(slot, self.vault.get_snippet(slot)), edited)
+
+        self.app.push_screen(SnippetPickerScreen(self.vault.snippets()), picked)
 
     def _profile_create(self) -> None:
         def handle(result: tuple[str, str] | None) -> None:

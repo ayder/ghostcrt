@@ -1,13 +1,13 @@
 from pathlib import Path
 
 import pytest
-from ghostcrt.ui.screens.snippet_edit import SnippetEdit, SnippetEditModal
-from ghostcrt.ui.screens.snippet_picker import SnippetPickerScreen
 from textual.app import App
 from textual.widgets import Button, Input, OptionList, Static, TextArea
 
 from ghostcrt.config.inventory import HostInventory
 from ghostcrt.ui.screens.main import MainScreen
+from ghostcrt.ui.screens.snippet_edit import SnippetEdit, SnippetEditModal
+from ghostcrt.ui.screens.snippet_picker import SnippetPickerScreen
 from ghostcrt.ui.widgets.snippet_bar import SnippetBar, SnippetButton
 from ghostcrt.vault.snippets import Snippet
 from ghostcrt.vault.vault import Vault, VaultError
@@ -46,7 +46,8 @@ class TestSnippetPicker:
                 "5  (empty)",
             ]
 
-            await pilot.press("down", "enter")
+            # Pickers open with nothing highlighted; the first Down lands on slot 1.
+            await pilot.press("down", "down", "enter")
             await pilot.pause()
 
         assert results == [2]
