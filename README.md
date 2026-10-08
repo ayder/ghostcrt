@@ -80,7 +80,7 @@ ghostcrt [--config PATH] [--vault PATH] [--theme NAME] [--debug] [-h] [--version
 | `Ctrl+H` | Show keyboard help |
 | `Ctrl+O` | Toggle mouse capture / native terminal selection |
 | `Ctrl+T` | From the terminal, show and focus the host list; from Hosts, hide it for a full-width terminal |
-| `Ctrl+N` | Focus host list |
+| `Ctrl+N`, then `1`–`5` | In the terminal: type that snippet. Elsewhere `Ctrl+N` focuses the host list |
 | `/` | Focus host filter (outside the terminal) |
 | `F10` | Focus menu bar (outside the terminal) |
 | `Esc` (Hosts) | Return to active terminal and close the narrow host drawer |
@@ -161,6 +161,15 @@ directives**, one `Directive value` entry per line.
 
 A profile is a named password, created with **Vault → Create / update profile…**. Assign
 one from the host editor's dropdown or **Vault → Assign profile to selected host…**; `(none)` removes the assignment.
+
+## Snippets
+
+Vault → **Snippets…** stores up to five snippets, each with a short name and a text.
+In the terminal, press `Ctrl+N` and then `1`–`5`, or click a snippet's button in the footer, to
+type it into the session. `\n` (or a real line break) is typed as Enter, and `\\` types a single
+backslash. Snippets are typed as keystrokes, not pasted, so a trailing `\n` submits the line.
+They are encrypted in the vault, so they can hold passwords. The text is shown in clear only
+while the snippet is open in its editor.
 
 ## Security notes
 
