@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 — 2026-10-08
+
+- Add snippets: up to five named texts stored encrypted in the vault and edited from Vault → Snippets…. In the terminal, Ctrl+N then 1–5 types a snippet as keystrokes (`\n` is Enter, `\\` a backslash), and the footer shows a button per snippet while the terminal is focused. Outside the terminal, Ctrl+N still focuses the host list.
+- Vault files are now format 3. Format 1 and 2 vaults open normally and are rewritten as format 3 on their first change; ghostcrt 0.3.2 and earlier cannot open a format 3 vault, so back up `vault.enc` first if you may need to go back.
+- Ctrl+T now toggles the host list: from the terminal it shows and focuses Hosts, and from Hosts it hides them so the terminal takes the full width. Esc returns to the terminal with the host list kept beside it.
+
 ## 0.3.2 — 2026-10-05
 
 - Preserve negotiated pixel mouse reporting when Ctrl+O recaptures the mouse, so host-group and terminal clicks retain their correct targets in Ghostty.
