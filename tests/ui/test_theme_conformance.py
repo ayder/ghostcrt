@@ -21,6 +21,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from ghostcrt.ui.screens.snippet_edit import SnippetEditModal
+from ghostcrt.ui.screens.snippet_picker import SnippetPickerScreen
 from textual.app import App
 from textual.color import Color
 
@@ -83,6 +85,8 @@ OVERLAYS = [
     ("#unlock-box", lambda: UnlockScreen(_tmp() / "vault.json")),
     ("#profile-edit-box", lambda: ProfileEditModal(profiles=[])),
     ("#profile-picker-box", lambda: ProfilePickerScreen("Assign", ["ops"], allow_none=True)),
+    ("#snippet-picker-box", lambda: SnippetPickerScreen([])),
+    ("#snippet-edit-box", lambda: SnippetEditModal(1, None)),
 ]
 
 
