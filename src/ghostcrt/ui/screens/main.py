@@ -29,6 +29,7 @@ from ghostcrt.ui.screens.profile_picker import ProfilePick, ProfilePickerScreen
 from ghostcrt.ui.widgets.host_list import HostList
 from ghostcrt.ui.widgets.menu_bar import MenuBar
 from ghostcrt.ui.widgets.session_tabs import SessionTabs
+from ghostcrt.ui.widgets.snippet_bar import SnippetBar
 from ghostcrt.ui.widgets.terminal import TerminalWidget
 from ghostcrt.vault.vault import Vault, VaultError
 
@@ -37,6 +38,8 @@ ASSIGNMENT_NOT_SAVED = (
     "Host saved; profile assignment was not. Use Vault → Assign profile to selected host… to retry."
 )
 NO_GROUP_CHOSEN = "Host not saved: no group chosen."
+TERMINAL_HINT = "TERMINAL  Ctrl+T Hosts · Ctrl+N Snippet · Ctrl+O Mouse"
+SNIPPET_HINT = "SNIPPET  1–5 Send · Esc Cancel"
 
 
 class MainScreen(Screen):
@@ -44,7 +47,7 @@ class MainScreen(Screen):
         Binding("f10", "focus_menu", "Menu", show=False),
         Binding("escape", "focus_terminal", "Terminal", show=False),
         Binding("slash", "focus_search", "Search", show=False),
-        Binding("ctrl+n", "focus_hosts", "Hosts", show=False),
+        Binding("ctrl+n", "snippet_or_hosts", "Snippet / Hosts", show=False),
         Binding("ctrl+w", "close_session", "Close session", show=False),
         Binding(
             "ctrl+t",
@@ -59,6 +62,12 @@ class MainScreen(Screen):
     DEFAULT_CSS = """
     #main-body {
         height: 1fr;
+    }
+    #status-bar {
+        height: 1;
+    }
+    #context-status {
+        width: 1fr;
     }
     MainScreen.compact #main-body {
         layout: vertical;
@@ -84,10 +93,13 @@ class MainScreen(Screen):
         with Horizontal(id="main-body"):
             yield HostList(id="host-list")
             yield SessionTabs(id="session-tabs")
-        yield Static("ghostcrt · Ctrl+H Help", id="context-status", markup=False)
+        with Horizontal(id="status-bar"):
+            yield Static("ghostcrt · Ctrl+H Help", id="context-status", markup=False)
+            yield SnippetBar(id="snippet-bar")
 
     def on_mount(self) -> None:
         self.refresh_hosts()
+        self.refresh_snippets()
         self.set_class(self.size.width < 90, "compact")
         self.action_focus_hosts()
         self._offer_include_setup()
@@ -127,9 +139,11 @@ class MainScreen(Screen):
     def on_descendant_focus(self, event: events.DescendantFocus) -> None:
         if event.widget is not self.app.focused:
             return
-        if isinstance(event.widget, TerminalWidget):
+        in_terminal = isinstance(event.widget, TerminalWidget)
+        self.query_one(SnippetBar).set_class(in_terminal, "-active")
+        if in_terminal:
             self.remove_class("hosts-open")
-            hint = "TERMINAL  Ctrl+T Hosts · Ctrl+O Mouse"
+            hint = TERMINAL_HINT
         elif isinstance(event.widget, Input):
             hint = "FILTER  Down Hosts · Esc Terminal · F10 Menu"
         elif event.widget.id == "host-tree":
@@ -139,6 +153,9 @@ class MainScreen(Screen):
             )
         else:
             hint = "MENU  Enter Open · Tab Next · Esc Terminal"
+        self._set_hint(hint)
+
+    def _set_hint(self, hint: str) -> None:
         self.query_one("#context-status", Static).update(f"ghostcrt · Ctrl+H Help · {hint}")
 
     def action_focus_search(self) -> None:
@@ -164,6 +181,39 @@ class MainScreen(Screen):
     def on_sessions_cleared(self) -> None:
         if self.has_class("hosts-hidden"):
             self.action_focus_hosts()
+
+    def refresh_snippets(self) -> None:
+        self.query_one(SnippetBar).show_snippets(self.vault.snippets())
+
+    def action_snippet_or_hosts(self) -> None:
+        focused = self.app.focused
+        if isinstance(focused, TerminalWidget):
+            focused.arm_snippet()
+            self._set_hint(SNIPPET_HINT)
+        else:
+            self.action_focus_hosts()
+
+    @on(TerminalWidget.SnippetChosen)
+    async def handle_snippet_key(self, message: TerminalWidget.SnippetChosen) -> None:
+        # A cancel caused by focus moving away is followed by DescendantFocus,
+        # which sets the hint for the new widget; only restore it here.
+        if isinstance(self.app.focused, TerminalWidget):
+            self._set_hint(TERMINAL_HINT)
+        if message.slot is not None:
+            await self._type_snippet(message.slot)
+
+    @on(SnippetBar.Chosen)
+    async def handle_snippet_click(self, message: SnippetBar.Chosen) -> None:
+        await self._type_snippet(message.slot)
+
+    async def _type_snippet(self, slot: int) -> None:
+        snippet = self.vault.get_snippet(slot)
+        if snippet is None:
+            self.notify(f"Snippet {slot} is empty.", severity="warning")
+            return
+        terminal = self.query_one(SessionTabs).active_terminal
+        if terminal is None or not await terminal.type_text(snippet.text):
+            self.notify("Session is not connected.", severity="warning")
 
     @on(TerminalWidget.ReleaseFocus)
     def on_terminal_release_focus(self) -> None:

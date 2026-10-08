@@ -317,9 +317,7 @@ class Vault:
     def _snapshot(self) -> tuple[dict[str, str], dict[str, str], dict[int, Snippet]]:
         return self._profiles.copy(), self._hosts.copy(), self._snippets.copy()
 
-    def _persist(
-        self, previous: tuple[dict[str, str], dict[str, str], dict[int, Snippet]]
-    ) -> None:
+    def _persist(self, previous: tuple[dict[str, str], dict[str, str], dict[int, Snippet]]) -> None:
         try:
             self.save()
         except VaultError:

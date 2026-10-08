@@ -249,6 +249,9 @@ ConfirmResetScreen {
     text-wrap: nowrap;
     text-overflow: ellipsis;
 }
+#status-bar {
+    background: $panel;
+}
 #action-menu-box { padding: 0; }
 #action-options { height: auto; border: none; padding: 0; }
 OptionList > .option-list--option { padding: 0 1; }
