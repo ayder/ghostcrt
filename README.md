@@ -1,9 +1,12 @@
 # ghostcrt
 
 Modern terminal UI for managing multiple SSH sessions with an encrypted
-password vault. Inspired by tools like `lazyssh`.
+password vault. Inspired by SecureCRT®.
 
 Licensed under [GNU GPLv3](LICENSE) (GPL-3.0-only).
+
+SecureCRT is a registered trademark of VanDyke Software, Inc. ghostcrt is not affiliated with or
+endorsed by VanDyke Software.
 
 ## Compact terminal UI
 
