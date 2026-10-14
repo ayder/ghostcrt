@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Separate the session tabs from the terminal with the same grey rule that edges the host list. The terminal is one row shorter.
+- While the session tabs have focus, outline the active tab in the theme's cursor colour instead of filling it. The top edge needs a terminal that draws overlines; others show the sides and bottom.
+
 ## 0.4.0 — 2026-10-08
 
 - Add snippets: up to five named texts stored encrypted in the vault and edited from Vault → Snippets…. In the terminal, Ctrl+N then 1–5 types a snippet as keystrokes (`\n` is Enter, `\\` a backslash), and the footer shows a button per snippet while the terminal is focused. Outside the terminal, Ctrl+N still focuses the host list.

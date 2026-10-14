@@ -11,7 +11,9 @@ endorsed by VanDyke Software.
 ## Compact terminal UI
 
 One-row controls and session tabs, arrow-key dropdown menus, clear selection
-markers, and a contextual footer keep the interface compact. Narrow terminals
+markers, and a contextual footer keep the interface compact. A grey rule, like
+the host sidebar's edge, separates the session tabs from the terminal; when the
+tabs have focus, the active tab is outlined in the cursor colour. Narrow terminals
 use a host drawer that closes when the SSH terminal gains focus. The host editor
 keeps advanced settings collapsed until needed. Colors follow the existing
 Textual theme picker (`Ctrl+P`).
