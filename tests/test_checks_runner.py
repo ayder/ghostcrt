@@ -17,7 +17,7 @@ def runner():
 
 TABLE = {
     "uv": "0.12.10",
-    "os": ["ubuntu-24.04", "macos-14"],
+    "os": ["ubuntu-24.04", "macos-15"],
     "python": ["3.12", "3.14"],
     "step": [
         {"name": "sync", "run": "uv sync --locked"},
@@ -42,7 +42,7 @@ def test_select_honours_only(runner):
 
     assert names("ubuntu-24.04", "3.12") == ["sync", "audit", "build", "cli"]
     assert names("ubuntu-24.04", "3.14") == ["sync", "build", "cli"]
-    assert names("macos-14", "3.12") == ["sync", "build", "cli"]
+    assert names("macos-15", "3.12") == ["sync", "build", "cli"]
 
 
 def test_command_uses_plain_uv_when_it_is_the_pinned_version(runner):
@@ -96,7 +96,7 @@ def test_command_leaves_non_uv_programs_alone(runner):
 
 
 def test_default_os_follows_the_platform(runner):
-    assert runner.default_os(TABLE, "Darwin") == "macos-14"
+    assert runner.default_os(TABLE, "Darwin") == "macos-15"
     assert runner.default_os(TABLE, "Linux") == "ubuntu-24.04"
 
 

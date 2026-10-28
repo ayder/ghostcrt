@@ -230,6 +230,10 @@ installation smoke tests. The runner uses the uv version pinned there, and
 committed tree (`HEAD`) in an
 `ubuntu:24.04` container as a non-root user, so Docker must be running.
 
+The gate prints each test name and the 15 slowest test durations. A 60-second
+watchdog covers each test and its teardown, dumping thread stacks and stopping
+pytest if it hangs instead of waiting for the CI job limit.
+
 Host-key integration tests use an optional local Docker SSH server and isolated
 temporary `known_hosts` files. With `sshpass` installed:
 
@@ -251,7 +255,7 @@ It uses OpenSSH's `-F` option, which also bypasses the system-wide SSH config.
 The setup check requires a leading, unconditional Include covering all group
 files. Existing partial or conditional includes do not satisfy this check.
 
-GitHub CI runs the checks above on Ubuntu 24.04 and macOS 14 with Python 3.12 and 3.14.
+GitHub CI runs the checks above on Ubuntu 24.04 and macOS 15 with Python 3.12 and 3.14.
 
 ## Releases
 
