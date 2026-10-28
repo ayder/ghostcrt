@@ -1,6 +1,6 @@
 [project]
 name = "ghostcrt"
-version = "0.4.0"
+version = "0.5.0"
 description = "Terminal UI for managing multiple SSH sessions with an encrypted password vault"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
   "textual==8.2.8",
-  "ghostty-textual @ https://github.com/ayder/ghostty-textual/releases/download/v0.0.5/ghostty_textual-0.0.5-py3-none-any.whl",
+  "ghostty-textual==0.1.0",
   "cryptography>=50.0.0",
   "argon2-cffi>=23.1.0",
   "sshconf>=0.2.7",
@@ -33,6 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "packaging>=24.2",
   "pytest>=8.0",
   "pytest-asyncio>=0.24",
   "ruff>=0.8",
@@ -43,6 +44,7 @@ dev = [
 ghostcrt = "ghostcrt.__main__:main"
 
 [project.urls]
+Documentation = "https://github.com/ayder/ghostcrt#readme"
 Repository = "https://github.com/ayder/ghostcrt"
 Issues = "https://github.com/ayder/ghostcrt/issues"
 
@@ -56,8 +58,11 @@ packages = ["src/ghostcrt"]
 [tool.hatch.build]
 exclude = ["/.ayder", "/.superpowers"]
 
-[tool.hatch.metadata]
-allow-direct-references = true
+[tool.hatch.build.targets.sdist]
+only-include = [
+  "src", "tests", "scripts", "benchmarks", "docs", ".github",
+  "pyproject.toml", "README.md", "CHANGELOG.md", "LICENSE", "uv.lock",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -103,7 +108,7 @@ only = { os = "ubuntu-24.04", python = "3.12" }
 
 [[tool.ghostcrt.checks.step]]
 name = "build"
-run = "uv build --out-dir {dist}"
+run = "uv build --no-sources --out-dir {dist}"
 
 [[tool.ghostcrt.checks.step]]
 name = "metadata"
@@ -125,5 +130,24 @@ cwd = "tmp"
 
 [[tool.ghostcrt.checks.step]]
 name = "wheel-import"
-run = "{smoke}/bin/python -c \"from ghostcrt.ui.widgets.terminal import TerminalWidget; from ghostty_textual import Terminal; t = Terminal(80, 24); t.feed(b'smoke'); t.close()\""
+run = "{smoke}/bin/python {root}/scripts/smoke_distribution.py"
+cwd = "tmp"
+
+[[tool.ghostcrt.checks.step]]
+name = "sdist-venv"
+run = "uv venv --python {python} {smoke}-sdist"
+
+[[tool.ghostcrt.checks.step]]
+name = "sdist-install"
+run = "uv pip install --python {smoke}-sdist/bin/python {dist}/*.tar.gz"
+
+[[tool.ghostcrt.checks.step]]
+name = "sdist-cli"
+run = "{smoke}-sdist/bin/ghostcrt --version"
+expect = "ghostcrt {version}"
+cwd = "tmp"
+
+[[tool.ghostcrt.checks.step]]
+name = "sdist-import"
+run = "{smoke}-sdist/bin/python {root}/scripts/smoke_distribution.py"
 cwd = "tmp"
