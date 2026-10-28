@@ -11,13 +11,15 @@ endorsed by VanDyke Software.
 ## Compact terminal UI
 
 One-row controls and session tabs, arrow-key dropdown menus, clear selection
-markers, and a contextual footer keep the interface compact. Narrow terminals
+markers, and a contextual footer keep the interface compact. A grey rule, like
+the host sidebar's edge, separates the session tabs from the terminal; when the
+tabs have focus, the active tab is outlined in the cursor colour. Narrow terminals
 use a host drawer that closes when the SSH terminal gains focus. The host editor
 keeps advanced settings collapsed until needed. Colors follow the existing
 Textual theme picker (`Ctrl+P`).
 
 Use `Ctrl+T` to return from a session to Hosts, `F10` to focus the menu bar,
-and `Ctrl+H` for help. Run `uv run ghostcrt` to try the interface locally.
+and `Ctrl+H` for help. Run `ghostcrt` after installing it below.
 
 ## Features (v1)
 
@@ -25,7 +27,7 @@ and `Ctrl+H` for help. Run `uv run ghostcrt` to try the interface locally.
   grouped as a tree (sidebar + fuzzy filter)
 - Live interactive SSH sessions in tabs (real `ssh` binary in a PTY)
 - Ghostty terminal emulation, scrollback, and input handling via
-  [`ghostty-textual`](https://github.com/ayder/ghostty-textual)
+  [`ghostty-textual`](https://pypi.org/project/ghostty-textual/)
 - Encrypted local vault for SSH passwords (Argon2id + AES-256-GCM)
 - Password delivery via `sshpass -d` (never in argv / env / disk)
 - In-app host config and vault management
@@ -42,17 +44,35 @@ macOS: `brew install hudochenkov/sshpass/sshpass` (or your preferred tap)
 
 ## Install
 
+Requires Python 3.12+ on macOS 13+ or glibc Linux 2.27+, on x86_64 or ARM64.
+The native terminal library is installed automatically from PyPI; no compilation
+is needed.
+
+Install as an isolated command-line tool with uv:
+
 ```bash
-uv tool install https://github.com/ayder/ghostcrt/releases/download/v0.4.0/ghostcrt-0.4.0-py3-none-any.whl
+uv tool install ghostcrt
 ghostcrt
 ```
 
+Or install with pip in a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install ghostcrt
+ghostcrt
+```
+
+To upgrade, run `uv tool upgrade ghostcrt` or, in the activated environment,
+`python -m pip install --upgrade ghostcrt`.
+
 ## Develop
 
-Requires Python 3.12+ on macOS 13+ or glibc Linux 2.27+, on x86_64 or ARM64.
-The dependency is pinned to the published
-[`ghostty-textual` v0.0.5 wheel](https://github.com/ayder/ghostty-textual/releases/tag/v0.0.5)
-on GitHub; `uv sync` installs it and the bundled native library automatically.
+The dependency is pinned to
+[`ghostty-textual` 0.1.0 on PyPI](https://pypi.org/project/ghostty-textual/0.1.0/),
+which pins `pyghostty==0.1.4`. `uv sync` installs the packages and bundled native
+library automatically.
 
 ```bash
 git clone https://github.com/ayder/ghostcrt.git
@@ -204,9 +224,10 @@ uv run --no-project python scripts/checks.py --all   # plus the Ubuntu jobs in D
 
 CI and the local gate run the same list of checks, kept in `pyproject.toml` under
 `[tool.ghostcrt.checks]`: locked sync, Ruff (uncached), tests, a dependency audit on
-Ubuntu/Python 3.12, wheel and source builds, `twine check`, and an installed-wheel smoke
-test. The runner uses the uv version pinned there, and `tests/test_ci_drift.py` fails if
-the workflows stop matching it. `--all` runs the committed tree (`HEAD`) in an
+Ubuntu/Python 3.12, wheel and source builds, `twine check`, and clean wheel/source
+installation smoke tests. The runner uses the uv version pinned there, and
+`tests/test_ci_drift.py` fails if the workflows stop matching it. `--all` runs the
+committed tree (`HEAD`) in an
 `ubuntu:24.04` container as a non-root user, so Docker must be running.
 
 Host-key integration tests use an optional local Docker SSH server and isolated
@@ -234,11 +255,30 @@ GitHub CI runs the checks above on Ubuntu 24.04 and macOS 14 with Python 3.12 an
 
 ## Releases
 
-Publish a GitHub Release using a tag that matches the package version (for
-example, `v0.3.0`). The **Release assets** workflow builds that tag, checks the
-wheel, and attaches the Python wheel and source distribution to the release.
+Update the version in `pyproject.toml`, regenerate `uv.lock`, and record the changes
+in `CHANGELOG.md`. Merge the release PR, tag that commit (for this release,
+`v0.5.0`), and publish its GitHub Release.
 
-For an existing release or a tag created before this workflow was added, use
-**Actions → Release assets → Run workflow**, select `main`, and enter the release
-tag. Publish the release first. Re-running the workflow uploads missing files
-and leaves existing assets in place. No additional repository secrets are needed.
+The **Release** workflow checks that the tag matches the package version and runs
+the same checks as CI on Linux and macOS with Python 3.12 and 3.14. After all jobs
+pass, it builds and smoke-tests the wheel and source distribution, validates PyPI
+metadata, and attaches the distributions to the GitHub Release. An isolated job
+publishes those same files to PyPI through Trusted Publishing with attestations.
+PR and branch builds only validate packages.
+
+Before the first PyPI release:
+
+1. Create a GitHub Actions environment named `pypi` in `ayder/ghostcrt`.
+2. Add a pending Trusted Publisher in the owner's
+   [PyPI publishing settings](https://pypi.org/manage/account/publishing/) with
+   project name `ghostcrt`, owner `ayder`, repository `ghostcrt`, workflow
+   `release.yml`, and environment `pypi`. For an existing project, add the
+   publisher in that project's publishing settings. No PyPI API token is needed.
+3. Merge this PR before publishing the `v0.5.0` GitHub Release.
+
+Retry failed jobs from Actions after fixing any publisher configuration. The
+workflow also supports **Actions → Release → Run workflow** on `main` with an
+existing published release tag containing this workflow (0.5.0 or later).
+It compares existing GitHub assets before reusing them, and skips files already
+on PyPI. Published versions cannot be replaced;
+use a new version for subsequent releases.

@@ -1,4 +1,4 @@
-name: Release assets
+name: Release
 
 on:
   release:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing published release tag (for example, v0.2.1)
+        description: Existing published release tag (for example, v0.5.0)
         required: true
         type: string
 
@@ -14,15 +14,35 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-assets-${{ github.event.release.tag_name || inputs.tag }}
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
   cancel-in-progress: false
 
 jobs:
-  release-assets:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        python: ['3.12', '3.14']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: '0.12.10'
+          python-version: ${{ matrix.python }}
+      - run: uv run --no-project python scripts/checks.py --os ${{ matrix.os }} --python ${{ matrix.python }}
+
+  build:
+    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    permissions:
-      contents: write
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GH_REPO: ${{ github.repository }}
@@ -63,38 +83,77 @@ jobs:
           fi
 
       - name: Build wheel and source distribution
-        run: uv build --out-dir "$RUNNER_TEMP/release-dist"
+        run: uv build --no-sources --out-dir "$RUNNER_TEMP/release-dist"
 
-      - name: Smoke test the wheel
+      - name: Validate PyPI metadata and README
+        run: uvx twine==7.0.0 check --strict "$RUNNER_TEMP"/release-dist/*
+
+      - name: Smoke test wheel and source installations
         run: |
-          uv venv "$RUNNER_TEMP/release-smoke"
-          uv pip install --python "$RUNNER_TEMP/release-smoke/bin/python" "$RUNNER_TEMP"/release-dist/*.whl
+          smoke_script="$GITHUB_WORKSPACE/scripts/smoke_distribution.py"
           cd "$RUNNER_TEMP"
           expected_version=${RELEASE_TAG#v}
-          actual_version=$("$RUNNER_TEMP/release-smoke/bin/ghostcrt" --version)
-          test "$actual_version" = "ghostcrt $expected_version"
-          "$RUNNER_TEMP/release-smoke/bin/python" - <<'PY'
-          from ghostcrt.ui.widgets.terminal import TerminalWidget
-          from ghostty_textual import Terminal
+          for artifact in "$RUNNER_TEMP"/release-dist/*.whl "$RUNNER_TEMP"/release-dist/*.tar.gz; do
+            uv venv --clear "$RUNNER_TEMP/release-smoke"
+            uv pip install --python "$RUNNER_TEMP/release-smoke/bin/python" "$artifact"
+            actual_version=$("$RUNNER_TEMP/release-smoke/bin/ghostcrt" --version)
+            test "$actual_version" = "ghostcrt $expected_version"
+            "$RUNNER_TEMP/release-smoke/bin/python" "$smoke_script"
+          done
 
-          terminal = Terminal(80, 24)
-          try:
-              terminal.feed(b"release smoke")
-              assert terminal.snapshot() is not None
-          finally:
-              terminal.close()
-          PY
+      - name: Retain tested distributions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-dist
+          path: ${{ runner.temp }}/release-dist/*
+          if-no-files-found: error
 
-      - name: Attach missing release assets
+  release-assets:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: python-dist
+          path: dist
+
+      - name: Attach tested release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           release_json=$(gh release view "$RELEASE_TAG" --json assets)
-          for artifact in "$RUNNER_TEMP"/release-dist/*.whl "$RUNNER_TEMP"/release-dist/*.tar.gz; do
+          mkdir -p "$RUNNER_TEMP/existing-release"
+          for artifact in dist/*.whl dist/*.tar.gz; do
             filename=$(basename "$artifact")
             if jq -e --arg name "$filename" '.assets | any(.name == $name)' <<< "$release_json" > /dev/null; then
-              echo "Already attached: $filename"
+              gh release download "$RELEASE_TAG" --pattern "$filename" --dir "$RUNNER_TEMP/existing-release"
+              cmp "$artifact" "$RUNNER_TEMP/existing-release/$filename"
             else
               gh release upload "$RELEASE_TAG" "$artifact"
             fi
           done
+
+  publish-pypi:
+    needs: release-assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ghostcrt
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: python-dist
+          path: dist
+      - name: Publish tested distributions with Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          skip-existing: true

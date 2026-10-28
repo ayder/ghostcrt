@@ -56,7 +56,49 @@ def test_ci_runs_nothing_but_the_checks_runner():
 
 def test_release_builds_with_a_checked_python():
     for step in setup_uv_steps("release.yml"):
-        assert str(step["with"]["python-version"]) in checks()["python"]
+        assert str(step["with"]["python-version"]) in [*checks()["python"], "${{ matrix.python }}"]
+
+
+def test_release_runs_the_same_matrix_and_checks_as_ci():
+    job = workflow("release.yml")["jobs"]["validate"]
+    matrix = job["strategy"]["matrix"]
+
+    assert matrix["os"] == checks()["os"]
+    assert [str(version) for version in matrix["python"]] == checks()["python"]
+    assert [" ".join(step["run"].split()) for step in job["steps"] if "run" in step] == [RUNNER]
+
+
+def test_only_the_isolated_pypi_job_has_oidc_permission():
+    release = workflow("release.yml")
+    jobs = release["jobs"]
+    publish = jobs["publish-pypi"]
+
+    assert release["permissions"] == {"contents": "read"}
+    assert jobs["build"]["needs"] == "validate"
+    assert jobs["release-assets"]["needs"] == "build"
+    assert publish["needs"] == "release-assets"
+    assert publish["permissions"] == {"id-token": "write"}
+    assert publish["environment"]["name"] == "pypi"
+    for name, job in jobs.items():
+        if name != "publish-pypi":
+            assert "id-token" not in job.get("permissions", {})
+
+    # Publishing consumes the build artifact without checking out or running code.
+    assert all("run" not in step for step in publish["steps"])
+    actions = [step["uses"].split("@")[0] for step in publish["steps"]]
+    assert actions == ["actions/download-artifact", "pypa/gh-action-pypi-publish"]
+    upload = next(
+        step
+        for step in jobs["build"]["steps"]
+        if step.get("uses", "").startswith("actions/upload-artifact@")
+    )
+    for job in (jobs["release-assets"], publish):
+        download = next(
+            step
+            for step in job["steps"]
+            if step.get("uses", "").startswith("actions/download-artifact@")
+        )
+        assert download["with"]["name"] == upload["with"]["name"]
 
 
 def test_check_steps_are_well_formed():

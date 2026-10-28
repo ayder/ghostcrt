@@ -1,6 +1,6 @@
 # ghostty-textual performance adoption review
 
-GhostCRT now pins the published ghostty-textual v0.0.5 wheel, retaining the faster
+GhostCRT now pins ghostty-textual 0.1.0 from PyPI, retaining the faster
 colored output, selection, and hyperlink rendering adopted with v0.0.4 while
 preserving its 60 Hz output/scroll batching. The original review and measurements
 below compared v0.0.2 with the library's performance working tree based on `eeaf9fa`.
@@ -125,3 +125,17 @@ The native library now retains a cell's base codepoint plus at most 64 additiona
 grapheme codepoints, including fragmented input. Further combining codepoints
 are ignored. Upstream regression coverage for this cap and UTF-8 buffer growth
 passed. No GhostCRT widget or scheduling changes were needed for this release.
+
+## v0.1.0 PyPI adoption
+
+GhostCRT 0.5.0 pins `ghostty-textual==0.1.0` from PyPI, replacing the GitHub wheel
+URL. The release pins `pyghostty==0.1.4` and requires CFFI 2.1.1 or newer on
+Python 3.15+. GhostCRT continues to check Python 3.12 and 3.14 on Linux and macOS.
+
+The widget API remains compatible, including the deferred frame callback,
+synchronized output, input queue, selection, and scrollback. GhostCRT retains
+its existing 60 Hz scheduler, theme mapping, snippet handling, and paste adapter.
+The existing terminal regression tests exercise these integrations against the
+published package. Release checks now also install both the wheel and source
+archive in fresh environments and verify the CLI version, packaged stylesheet,
+native frame extraction, and scrollback outside the source tree.

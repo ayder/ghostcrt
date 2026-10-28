@@ -84,6 +84,7 @@ def run_pair(table: dict, os_name: str, python: str, version: str) -> bool:
     pinned, local = table["uv"], installed_uv()
     with tempfile.TemporaryDirectory(prefix=f"ghostcrt-checks-{python}-") as tmp:
         values = {
+            "root": str(ROOT),
             "dist": f"{tmp}/dist",
             "smoke": f"{tmp}/smoke",
             "python": python,

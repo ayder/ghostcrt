@@ -4,6 +4,8 @@ import re
 import tomllib
 from pathlib import Path
 
+from packaging.requirements import Requirement
+
 ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text())
 PROJECT = PYPROJECT["project"]
@@ -21,6 +23,19 @@ def test_project_has_pypi_metadata():
     assert PROJECT["authors"]
     assert PROJECT["keywords"]
     assert "Environment :: Console" in PROJECT["classifiers"]
+
+
+def test_dependencies_can_be_published_on_pypi():
+    # PyPI rejects distributions containing direct URL requirements.
+    dependencies = PROJECT["dependencies"] + [
+        dependency
+        for extra in PROJECT["optional-dependencies"].values()
+        for dependency in extra
+    ]
+    assert all(Requirement(dependency).url is None for dependency in dependencies)
+
+    locked = tomllib.loads((ROOT / "uv.lock").read_text())
+    assert all("url" not in package["source"] for package in locked["package"])
 
 
 def test_python_classifiers_match_the_checked_versions():

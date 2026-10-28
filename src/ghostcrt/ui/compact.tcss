@@ -80,8 +80,22 @@ MainScreen.compact HostList {
 MainScreen.compact.hosts-open HostList { display: block; }
 MainScreen.hosts-hidden HostList { display: none; }
 
+/* The tab row, then the sidebar's neutral rule. Not $border: that is the focus ring. */
 SessionTabs Tabs {
-    height: 1;
+    height: 2;
+    border-bottom: solid ansi_bright_black;
+}
+
+/* A focused strip outlines the active tab in the cursor colour instead of filling it;
+   the vkey edges take the padding's columns, so the tab keeps its width. SessionTab
+   adds the top and bottom lines (overline + underline) to the rendered row. */
+SessionTabs ContentTabs:focus SessionTab.-active {
+    padding: 0;
+    background: transparent;
+    color: $block-cursor-background;
+    text-style: bold;
+    border-left: vkey $block-cursor-background;
+    border-right: vkey $block-cursor-background;
 }
 
 SessionTabs Underline {
