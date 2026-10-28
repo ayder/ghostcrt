@@ -89,7 +89,7 @@ ignore = [
 # matching this table, and tests/test_packaging.py ties the Python classifiers to it.
 [tool.ghostcrt.checks]
 uv = "0.12.10"
-os = ["ubuntu-24.04", "macos-14"]
+os = ["ubuntu-24.04", "macos-15"]
 python = ["3.12", "3.14"]
 
 [[tool.ghostcrt.checks.step]]
