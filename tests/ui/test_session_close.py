@@ -140,10 +140,14 @@ async def test_quit_confirmation_can_cancel_and_does_not_stack_on_repeated_ctrl_
 
 async def test_quit_with_only_exited_sessions_needs_no_confirmation():
     app = SessionApp()
-    async with app.run_test() as pilot:
+    async with app.run_test():
         session = SshSession("exited")
         await app.query_one(SessionTabs).add_session(session)
         session._set_state(SessionState.DISCONNECTED)
-        await pilot.press("ctrl+q")
+        # Pilot.press waits for animations after dispatching the key. Quitting
+        # can stop the animator first, leaving that test helper waiting forever.
+        # The confirmation test above already exercises the Ctrl+Q binding.
+        await app.action_quit()
         assert not isinstance(app.screen, ConfirmCloseScreen)
-    assert session._disposed
+        assert app._exit
+        assert session._disposed
